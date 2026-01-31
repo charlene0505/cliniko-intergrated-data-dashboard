@@ -4,7 +4,10 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     // Test connection by fetching patients (limited to 1)
-    const data = await clinikoFetch("/patients?per_page=1");
+    const data = (await clinikoFetch("/patients?per_page=1")) as {
+      total_entries: number;
+      patients: unknown[];
+    };
     return NextResponse.json({
       success: true,
       message: "Connected to Cliniko successfully!",

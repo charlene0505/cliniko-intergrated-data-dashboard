@@ -69,7 +69,7 @@ export async function GET() {
     try {
       await sleep(REQUEST_DELAY_MS); // Rate limit protection
       const endpoint = url.replace(/https:\/\/api\.[^/]+\.cliniko\.com\/v1/, "");
-      const contact: Contact = await clinikoFetch(endpoint);
+      const contact = (await clinikoFetch(endpoint)) as Contact;
       contactCache.set(url, contact);
       contactFetchSuccess++;
       return contact;
@@ -99,7 +99,7 @@ export async function GET() {
 
         while (hasMore) {
           await sleep(REQUEST_DELAY_MS); // Rate limit protection
-          const data: PatientsResponse = await clinikoFetch("/patients?page=" + page + "&per_page=100");
+          const data = (await clinikoFetch("/patients?page=" + page + "&per_page=100")) as PatientsResponse;
           allPatients.push(...data.patients);
           totalEntries = data.total_entries;
 
