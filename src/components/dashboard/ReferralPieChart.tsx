@@ -41,7 +41,7 @@ export function ReferralPieChart({ data, title }: ReferralPieChartProps) {
               outerRadius={120}
               fill="#8884d8"
               dataKey="value"
-              label={(entry) => entry.name + ": " + entry.percentage + "%"}
+              label={({ name, percent }: { name?: string; percent?: number }) => (name || "") + ": " + ((percent || 0) * 100).toFixed(1) + "%"}
             >
               {dataWithPercentage.map((_, index) => (
                 <Cell key={"cell-" + index} fill={COLORS[index % COLORS.length]} />
