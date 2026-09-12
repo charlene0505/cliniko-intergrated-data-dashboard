@@ -10,25 +10,34 @@ export interface AuthUser {
   role: UserRole;
 }
 
-// ── Hardcoded users (replace with DB lookup later) ─────────────────────────
-
-const USERS: Record<string, { password: string; role: UserRole }> = {
-  admin:  { password: 'admin123',  role: 'admin'  },
-  owner:  { password: 'owner123',  role: 'owner'  },
-  physio: { password: 'physio123', role: 'physio' },
-};
-
+// An unset username or password disables that account; roles stay server-controlled.
 export function validateCredentials(username: string, password: string): AuthUser | null {
-  const user = USERS[username.toLowerCase()];
-  if (!user || user.password !== password) return null;
-  return { username: username.toLowerCase(), role: user.role };
+  if (typeof username !== 'string' || typeof password !== 'string') return null;
+  const accounts: { username?: string; password?: string; role: UserRole }[] = [
+    { username: process.env.AUTH_ADMIN_USERNAME, password: process.env.AUTH_ADMIN_PASSWORD, role: 'admin' },
+    { username: process.env.AUTH_OWNER_USERNAME, password: process.env.AUTH_OWNER_PASSWORD, role: 'owner' },
+    { username: process.env.AUTH_PHYSIO_USERNAME, password: process.env.AUTH_PHYSIO_PASSWORD, role: 'physio' },
+  ];
+  const matches = accounts.filter(account => account.username?.trim().toLowerCase() === username.trim().toLowerCase());
+  if (matches.length !== 1) return null;
+  const account = matches[0];
+  if (!account.username?.trim() || !account.password || account.password !== password) return null;
+  return { username: account.username.trim(), role: account.role };
 }
 
 // ── JWT helpers ────────────────────────────────────────────────────────────
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? 'dev-secret-change-in-production'
-);
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET environment variable is not set');
+  return new TextEncoder().encode(secret);
+}
+
+export function isCronRequest(request: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  return !!secret && request.headers.get('authorization') === `Bearer ${secret}`;
+}
+
 const COOKIE_NAME = 'shp_session';
 const SESSION_DURATION = 60 * 60 * 8; // 8 hours in seconds
 
@@ -37,12 +46,12 @@ export async function createSessionToken(user: AuthUser): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DURATION}s`)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifySessionToken(token: string): Promise<AuthUser | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return {
       username: payload.username as string,
       role: payload.role as UserRole,

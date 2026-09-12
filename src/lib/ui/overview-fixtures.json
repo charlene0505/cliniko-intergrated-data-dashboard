@@ -1,0 +1,426 @@
+{
+  "highlights": [
+    {
+      "time": "8:00am",
+      "name": "Harriet Voss",
+      "reason": "High cancellation risk",
+      "note": "4 late cancels · 9 mo",
+      "clinician": "Tom Reddy",
+      "practice": "Hurstville"
+    },
+    {
+      "time": "8:30am",
+      "name": "Rosalind Achterberg",
+      "reason": "New patient",
+      "note": "GPCCMP · consent filled",
+      "clinician": "Ana Villalobos",
+      "practice": "CBD"
+    },
+    {
+      "time": "9:00am",
+      "name": "Priya Selvam",
+      "reason": "New patient",
+      "note": "Private · consent filled",
+      "clinician": "Sara Nguyen",
+      "practice": "Hurstville"
+    },
+    {
+      "time": "9:15am",
+      "name": "Trent Mbeki",
+      "reason": "High cancellation risk",
+      "note": "3 late cancels, 1 no-show · 6 mo",
+      "clinician": "Tom Reddy",
+      "practice": "CBD"
+    },
+    {
+      "time": "10:45am",
+      "name": "Ismail Ferhat",
+      "reason": "New patient",
+      "note": "Private · consent filled",
+      "clinician": "Tom Reddy",
+      "practice": "Hurstville"
+    },
+    {
+      "time": "11:00am",
+      "name": "Yvette Ostrowski",
+      "reason": "High cancellation risk",
+      "note": "2 no-shows · 3 mo",
+      "clinician": "Sara Nguyen",
+      "practice": "Hurstville"
+    },
+    {
+      "time": "11:30am",
+      "name": "Ravi Chandrasekaran",
+      "reason": "AHTR not updated",
+      "note": "WC · pending since 5 Sep",
+      "clinician": "Priya Nandan",
+      "practice": "Hurstville"
+    },
+    {
+      "time": "1:15pm",
+      "name": "Willa Brandtner",
+      "reason": "Consent missing",
+      "note": "WC · first visit",
+      "clinician": "Sara Nguyen",
+      "practice": "CBD"
+    },
+    {
+      "time": "2:00pm",
+      "name": "Ned Halloran",
+      "reason": "Consent missing",
+      "note": "WC · first visit",
+      "clinician": "Priya Nandan",
+      "practice": "CBD"
+    },
+    {
+      "time": "2:30pm",
+      "name": "Callum Pereira",
+      "reason": "AHTR not updated",
+      "note": "WC · 1 of 10 sessions left",
+      "clinician": "Tom Reddy",
+      "practice": "CBD"
+    },
+    {
+      "time": "3:45pm",
+      "name": "Dessie Mwangi",
+      "reason": "High cancellation risk",
+      "note": "2 late cancels · 4 mo",
+      "clinician": "Ana Villalobos",
+      "practice": "Hurstville"
+    },
+    {
+      "time": "4:00pm",
+      "name": "Otis Nakamura",
+      "reason": "New patient",
+      "note": "CTP · consent filled",
+      "clinician": "Priya Nandan",
+      "practice": "CBD"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "group": "Today",
+      "text": "Call to rebook — EPC referral expires in 10 days",
+      "patient": "Gordon Halloway",
+      "source": "EPC alert",
+      "priority": "High"
+    },
+    {
+      "id": "t2",
+      "group": "Today",
+      "text": "Send progress report to referring GP (3 patients)",
+      "patient": "Dr Amara Osei",
+      "source": "Referral",
+      "priority": "High"
+    },
+    {
+      "id": "t3",
+      "group": "Today",
+      "text": "Chase rejected Medicare claim from 22 Aug",
+      "patient": "Judith Farkas",
+      "source": "Billing",
+      "priority": "High"
+    },
+    {
+      "id": "t4",
+      "group": "Today",
+      "text": "Confirm tomorrow’s 14 appointments by SMS",
+      "patient": "All practitioners",
+      "source": "Schedule",
+      "priority": "Routine"
+    },
+    {
+      "id": "t5",
+      "group": "Today",
+      "text": "Offer Tue 10:30 cancellation to waitlist",
+      "patient": "Waitlist",
+      "source": "Waitlist",
+      "priority": "Routine"
+    },
+    {
+      "id": "t6",
+      "group": "Tomorrow",
+      "text": "Follow up post-op knee program and rebook",
+      "patient": "Hamish Okoro",
+      "source": "Follow-up",
+      "priority": "Routine"
+    },
+    {
+      "id": "t7",
+      "group": "Tomorrow",
+      "text": "Post referral pads and thank-you note",
+      "patient": "Northside Family Practice",
+      "source": "Referral",
+      "priority": "Routine"
+    },
+    {
+      "id": "t8",
+      "group": "This week",
+      "text": "Reconcile August WorkCover invoices",
+      "patient": "Accounts",
+      "source": "Billing",
+      "priority": "Routine"
+    },
+    {
+      "id": "t9",
+      "group": "This week",
+      "text": "Request new EPC referral before expiry",
+      "patient": "Nikolas Brandt",
+      "source": "EPC alert",
+      "priority": "High"
+    }
+  ],
+  "epc": [
+    {
+      "name": "Gordon Halloway",
+      "doctor": "Dr Liam Petersen",
+      "used": 4,
+      "lastVisit": "2 Sep",
+      "expires": "22 Sep",
+      "kind": "alert",
+      "phone": "0417 332 806",
+      "email": "g.halloway@mail.com",
+      "clinician": "Tom Reddy",
+      "note": "Referral expires soon — call first"
+    },
+    {
+      "name": "Nikolas Brandt",
+      "doctor": "Dr Priya Raghavan",
+      "used": 4,
+      "lastVisit": "1 Sep",
+      "expires": "28 Sep",
+      "kind": "alert",
+      "phone": "0432 908 174",
+      "email": "nbrandt@mail.com",
+      "clinician": "Ana Villalobos",
+      "note": "Prefers early mornings"
+    },
+    {
+      "name": "Wendell Pike",
+      "doctor": "Dr Michael Tran",
+      "used": 3,
+      "lastVisit": "25 Aug",
+      "expires": "5 Oct",
+      "kind": "due",
+      "phone": "0455 116 290",
+      "email": "wendell.pike@mail.com",
+      "clinician": "Priya Nandan",
+      "note": "Away until 20 Sep"
+    },
+    {
+      "name": "Bruno Castellano",
+      "doctor": "Dr Amara Osei",
+      "used": 3,
+      "lastVisit": "27 Aug",
+      "expires": "14 Oct",
+      "kind": "due",
+      "phone": "0433 190 774",
+      "email": "b.castellano@mail.com",
+      "clinician": "Priya Nandan",
+      "note": "Knee OA — asked to call back Monday"
+    },
+    {
+      "name": "Fatima Zahra",
+      "doctor": "Dr Sofia Marchetti",
+      "used": 2,
+      "lastVisit": "30 Aug",
+      "expires": "11 Nov",
+      "kind": "flat",
+      "phone": "0401 558 923",
+      "email": "fzahra@mail.com",
+      "clinician": "Sara Nguyen",
+      "note": "Wants same-day confirmation SMS"
+    },
+    {
+      "name": "Judith Farkas",
+      "doctor": "Dr Liam Petersen",
+      "used": 2,
+      "lastVisit": "22 Aug",
+      "expires": "2 Nov",
+      "kind": "flat",
+      "phone": "0466 204 517",
+      "email": "judith.farkas@mail.com",
+      "clinician": "Tom Reddy",
+      "note": "Medicare claim rejected 22 Aug"
+    },
+    {
+      "name": "Carmela Ruiz",
+      "doctor": "Dr Amara Osei",
+      "used": 1,
+      "lastVisit": "29 Aug",
+      "expires": "20 Dec",
+      "kind": "flat",
+      "phone": "0478 661 340",
+      "email": "c.ruiz@mail.com",
+      "clinician": "Ana Villalobos",
+      "note": "New plan — book block of 4"
+    }
+  ],
+  "doctors": [
+    {
+      "name": "Dr Amara Osei",
+      "practice": "Wentworth Medical Centre",
+      "value": 24,
+      "epc": 17,
+      "booked": 22,
+      "last": "11 Sep",
+      "delta": "+6"
+    },
+    {
+      "name": "Dr Liam Petersen",
+      "practice": "Northside Family Practice",
+      "value": 19,
+      "epc": 12,
+      "booked": 16,
+      "last": "10 Sep",
+      "delta": "+2"
+    },
+    {
+      "name": "Dr Priya Raghavan",
+      "practice": "Harbour GP Clinic",
+      "value": 15,
+      "epc": 9,
+      "booked": 14,
+      "last": "9 Sep",
+      "delta": "+4"
+    },
+    {
+      "name": "Dr Michael Tran",
+      "practice": "Wentworth Medical Centre",
+      "value": 12,
+      "epc": 8,
+      "booked": 10,
+      "last": "8 Sep",
+      "delta": "−1"
+    },
+    {
+      "name": "Dr Sofia Marchetti",
+      "practice": "Eastgate Health",
+      "value": 9,
+      "epc": 5,
+      "booked": 9,
+      "last": "5 Sep",
+      "delta": "+3"
+    },
+    {
+      "name": "Dr James Whitlock",
+      "practice": "Northside Family Practice",
+      "value": 7,
+      "epc": 4,
+      "booked": 5,
+      "last": "2 Sep",
+      "delta": "−4"
+    },
+    {
+      "name": "Dr Nadia Haddad",
+      "practice": "Riverbend Medical",
+      "value": 6,
+      "epc": 3,
+      "booked": 6,
+      "last": "1 Sep",
+      "delta": "+6"
+    },
+    {
+      "name": "Dr Colin Beauchamp",
+      "practice": "Eastgate Health",
+      "value": 4,
+      "epc": 2,
+      "booked": 3,
+      "last": "29 Aug",
+      "delta": "−2"
+    }
+  ],
+  "ahtr": [
+    {
+      "name": "Marguerite Lefevre",
+      "scheme": "CTP",
+      "claim": "CTP-44992",
+      "ahtr": "AHTR2",
+      "approved": 0,
+      "used": 0,
+      "next": "—",
+      "kind": "alert"
+    },
+    {
+      "name": "Ravi Chandrasekaran",
+      "scheme": "WC",
+      "claim": "WC-2026-8617",
+      "ahtr": "AHTR1",
+      "approved": 0,
+      "used": 0,
+      "next": "—",
+      "kind": "alert"
+    },
+    {
+      "name": "Hugo Vanterpool",
+      "scheme": "WC",
+      "claim": "WC-2026-8903",
+      "ahtr": "AHTR4",
+      "approved": 6,
+      "used": 5,
+      "next": "—",
+      "kind": "alert"
+    },
+    {
+      "name": "Callum Pereira",
+      "scheme": "WC",
+      "claim": "WC-2026-8455",
+      "ahtr": "AHTR4",
+      "approved": 10,
+      "used": 9,
+      "next": "22 Sep",
+      "kind": "alert"
+    },
+    {
+      "name": "Dermot Kavanagh",
+      "scheme": "WC",
+      "claim": "WC-2026-8841",
+      "ahtr": "AHTR7",
+      "approved": 8,
+      "used": 7,
+      "next": "15 Sep",
+      "kind": "alert"
+    },
+    {
+      "name": "Nadine Achebe",
+      "scheme": "CTP",
+      "claim": "CTP-45501",
+      "ahtr": "AHTR1",
+      "approved": 8,
+      "used": 6,
+      "next": "19 Sep",
+      "kind": "due"
+    },
+    {
+      "name": "Larissa Okonkwo",
+      "scheme": "CTP",
+      "claim": "CTP-45219",
+      "ahtr": "AHTR6",
+      "approved": 6,
+      "used": 3,
+      "next": "16 Sep",
+      "kind": "flat"
+    },
+    {
+      "name": "Terrence Igwe",
+      "scheme": "WC",
+      "claim": "WC-2026-9012",
+      "ahtr": "AHTR5",
+      "approved": 6,
+      "used": 1,
+      "next": "17 Sep",
+      "kind": "flat"
+    },
+    {
+      "name": "Simone Beaulieu",
+      "scheme": "CTP",
+      "claim": "CTP-44870",
+      "ahtr": "AHTR2",
+      "approved": 8,
+      "used": 2,
+      "next": "18 Sep",
+      "kind": "flat"
+    }
+  ]
+}

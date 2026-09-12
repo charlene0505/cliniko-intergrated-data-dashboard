@@ -12,6 +12,33 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Practice-overview / referral-overview brand palette.
+   Overrides Tailwind's default teal-300/500/600/700 with the exact
+   brand hexes, so `bg-teal-500`, `text-teal-700`, etc. use our colors. */
+@theme {
+  --color-teal-300: #8fd3ee;
+  --color-teal-500: #14a3a8;
+  --color-teal-600: #0e8a8f;
+  --color-teal-700: #0b7276;
+
+  --color-ink: #1a1a1a;
+  --color-clay: #a3561f;
+  --color-clay-light: #f0a070;
+
+  --color-surface: #eae8e3;
+  --color-surface-muted: #f8f4ea;
+  --color-track: #e6e3dc;
+  --color-banner: #b3e0f7;
+  --color-banner-light: #e1f3fd;
+  --color-banner-semiLight: #d1ecfa;
+
+  --color-alert: #fbe8dc;
+  --color-info: #e3f4f5;
+  --color-flat: #f1efe9;
+  --color-warn: #f7f0d2;
+  --color-warn-text: #6f5c12;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

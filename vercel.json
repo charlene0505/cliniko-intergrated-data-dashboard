@@ -4,7 +4,6 @@
   "framework": "nextjs",
   "regions": ["syd1"],
   "crons": [
-    { "path": "/api/sync?type=incremental", "schedule": "0 * * * *" },
     { "path": "/api/sync?type=full",        "schedule": "0 2 * * *" }
   ]
 }

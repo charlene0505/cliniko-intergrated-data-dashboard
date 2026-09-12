@@ -1,14 +1,24 @@
+import { syncAppointments, syncClinicalOthers } from '@/lib/sync-clinical';
 import { getDb } from '@/lib/mongodb';
+import { getSession, isCronRequest } from '@/lib/auth';
 import { clinikoFetch } from '@/lib/cliniko';
-import type { Patient, Doctor, ReferralStat, SyncJob, StatPeriod } from '@/lib/models';
+import type { Patient, Doctor, ReferralStat, SyncJob, SyncScope, StatPeriod, ContactFailure } from '@/lib/models';
+import type { Db } from 'mongodb';
 
 const REQUEST_DELAY_MS = 50;
+const SCOPES: SyncScope[] = ['patients', 'appointments', 'clinical'];
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ── Cliniko API shapes ─────────────────────────────────────────────────────
+
+interface ClinikoPhoneNumber {
+  number?: string;
+  normalized_number?: string;
+  phone_type?: string;
+}
 
 interface ClinikoPatient {
   id: number;
@@ -17,6 +27,12 @@ interface ClinikoPatient {
   created_at?: string;
   updated_at?: string;
   referring_doctor?: { links?: { self?: string } };
+  state?: string;
+  post_code?: string;
+  country?: string;
+  email?: string;
+  patient_phone_numbers?: ClinikoPhoneNumber[];
+  appointment_notes?: string;
 }
 
 interface ClinikioPatientsResponse {
@@ -47,6 +63,12 @@ function buildDisplayName(contact: ClinikoContact): string {
   return 'Unknown';
 }
 
+function pickPhone(numbers?: ClinikoPhoneNumber[]): string | null {
+  if (!numbers?.length) return null;
+  const preferred = numbers.find(n => n.phone_type === 'Mobile') ?? numbers[0];
+  return preferred.number ?? preferred.normalized_number ?? null;
+}
+
 function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 86400 * 1000);
 }
@@ -61,9 +83,13 @@ function startOfThisMonth(): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1); // 1st of current month, 00:00:00
 }
 
+function emptyJobCounts() {
+  return { patientsProcessed: 0, patientsUpserted: 0, doctorsUpserted: 0, appointmentsUpserted: 0, attendeesUpserted: 0, patientCasesUpserted: 0 };
+}
+
 // ── Compute and store referral stats from existing MongoDB data ────────────
 
-async function computeAndStoreStats(db: Awaited<ReturnType<typeof getDb>>) {
+async function computeAndStoreStats(db: Db) {
   const patientsCol = db.collection('patients');
   const statsCol = db.collection<ReferralStat>('referral_stats');
 
@@ -122,21 +148,167 @@ async function computeAndStoreStats(db: Awaited<ReturnType<typeof getDb>>) {
   }
 }
 
+// ── Patients scope ──────────────────────────────────────────────────────────
+
+async function runPatientsSync(db: Db, send: (data: object) => void, since: Date | null) {
+  const patientsCol = db.collection<Patient>('patients');
+  const doctorsCol = db.collection<Doctor>('doctors');
+  const contactFailures: ContactFailure[] = [];
+  const failedContacts = new Set<string>();
+
+  send({ phase: 'fetching', message: 'Fetching patients from Cliniko...', current: 0, total: 0 });
+
+  const allPatients: ClinikoPatient[] = [];
+  let page = 1;
+  let hasMore = true;
+  let totalEntries = 0;
+
+  while (hasMore) {
+    await sleep(REQUEST_DELAY_MS);
+    let endpoint = `/patients?page=${page}&per_page=100`;
+    if (since) endpoint += `&updated_since=${since.toISOString()}`;
+
+    const data = (await clinikoFetch(endpoint)) as ClinikioPatientsResponse;
+    allPatients.push(...data.patients);
+    totalEntries = data.total_entries;
+
+    send({ phase: 'fetching', message: 'Fetching patients from Cliniko...', current: allPatients.length, total: totalEntries });
+
+    hasMore = !!data.links?.next;
+    page++;
+    if (page > 200) break;
+  }
+
+  send({ phase: 'processing', message: 'Saving to database...', current: 0, total: allPatients.length });
+
+  const doctorCache = new Map<string, string>();
+  let patientsUpserted = 0;
+  let doctorsUpserted = 0;
+
+  for (const p of allPatients) {
+    let referringDoctorId: string | null = null;
+
+    const doctorUrl = p.referring_doctor?.links?.self;
+    if (doctorUrl) {
+      const contactId = extractContactId(doctorUrl);
+      if (contactId) {
+        if (!doctorCache.has(contactId) && !failedContacts.has(contactId)) {
+          const existing = await doctorsCol.findOne({ _id: contactId });
+          if (existing) {
+            doctorCache.set(contactId, existing.displayName);
+          } else {
+            try {
+              await sleep(REQUEST_DELAY_MS);
+              const contact = (await clinikoFetch(`/contacts/${contactId}`)) as ClinikoContact;
+              const displayName = buildDisplayName(contact);
+
+              await doctorsCol.updateOne(
+                { _id: contactId },
+                { $set: { _id: contactId, firstName: contact.first_name ?? null, lastName: contact.last_name ?? null, companyName: contact.company_name ?? null, displayName, clinikoUrl: doctorUrl, syncedAt: new Date() } },
+                { upsert: true }
+              );
+
+              doctorCache.set(contactId, displayName);
+              doctorsUpserted++;
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : '';
+              const status = detail.match(/Cliniko API error (\d{3})/)?.[1];
+              const message = status
+                ? `Cliniko returned HTTP ${status}. Check contact availability and API access.`
+                : 'Contact could not be fetched or saved. Check the connection and retry the sync.';
+              const failure = { contactId, message };
+              failedContacts.add(contactId);
+              contactFailures.push(failure);
+              console.error(`Failed to fetch/save contact ${contactId}: ${message}`);
+              send({ phase: 'warning', ...failure });
+            }
+          }
+        }
+        referringDoctorId = contactId;
+      }
+    }
+
+    await patientsCol.updateOne(
+      { _id: String(p.id) },
+      { $set: {
+        _id: String(p.id), firstName: p.first_name ?? '', lastName: p.last_name ?? '',
+        clinikoCreatedAt: p.created_at ? new Date(p.created_at) : new Date(),
+        clinikoUpdatedAt: p.updated_at ? new Date(p.updated_at) : new Date(),
+        referringDoctorId, syncedAt: new Date(), isDeleted: false,
+        state: p.state ?? null, postCode: p.post_code ?? null, country: p.country ?? null,
+        email: p.email ?? null, phone: pickPhone(p.patient_phone_numbers), appointmentNotes: p.appointment_notes ?? null,
+      } },
+      { upsert: true }
+    );
+
+    patientsUpserted++;
+    if (patientsUpserted % 100 === 0 || patientsUpserted === allPatients.length) {
+      send({ phase: 'processing', message: 'Saving to database...', current: patientsUpserted, total: allPatients.length });
+    }
+  }
+
+  send({ phase: 'computing', message: 'Computing referral statistics...' });
+  await computeAndStoreStats(db);
+
+  return { patientsProcessed: allPatients.length, patientsUpserted, doctorsUpserted, contactFailures };
+}
+
+// ── Scoped job runner ────────────────────────────────────────────────────────
+
+async function runScope(db: Db, send: (data: object) => void, scope: SyncScope, type: 'full' | 'incremental') {
+  const syncJobsCol = db.collection<SyncJob>('sync_jobs');
+
+  const alreadyRunning = await syncJobsCol.findOne({ status: 'running', scope });
+  if (alreadyRunning) {
+    send({ phase: 'warning', message: `${scope} sync is already in progress — skipping.` });
+    return;
+  }
+
+  let since: Date | null = null;
+  if (type === 'incremental') {
+    const lastJob = await syncJobsCol.findOne({ status: 'complete', scope }, { sort: { completedAt: -1 } });
+    since = lastJob?.completedAt ?? null;
+  }
+
+  const job: SyncJob = { scope, type, status: 'running', startedAt: new Date(), completedAt: null, lastSyncedAt: null, error: null, ...emptyJobCounts() };
+  const { insertedId } = await syncJobsCol.insertOne(job);
+
+  try {
+    let counts: Partial<ReturnType<typeof emptyJobCounts>> & { contactFailures?: ContactFailure[] } = {};
+    if (scope === 'patients') counts = await runPatientsSync(db, send, since);
+    else if (scope === 'appointments') counts = await syncAppointments(db, send, since);
+    else counts = await syncClinicalOthers(db, send, since);
+
+    await syncJobsCol.updateOne(
+      { _id: insertedId },
+      { $set: { status: 'complete', completedAt: new Date(), lastSyncedAt: since, ...emptyJobCounts(), ...counts } }
+    );
+    send({ phase: 'scope_complete', scope, ...counts });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    await syncJobsCol.updateOne({ _id: insertedId }, { $set: { status: 'failed', completedAt: new Date(), error: message } });
+    send({ phase: 'error', scope, error: message });
+    throw error;
+  }
+}
+
 // ── Main sync handler ──────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
+  if (!isCronRequest(request) && !(await getSession())) {
+    return Response.json({ error: 'Authentication required' }, { status: 401 });
+  }
   const { searchParams } = new URL(request.url);
   const type = searchParams.get('type') === 'full' ? 'full' : 'incremental';
+  const scopeParam = searchParams.get('scope');
+  const scopes: SyncScope[] = scopeParam && (SCOPES as string[]).includes(scopeParam) ? [scopeParam as SyncScope] : SCOPES;
 
   const db = await getDb();
-  const patientsCol = db.collection<Patient>('patients');
-  const doctorsCol = db.collection<Doctor>('doctors');
   const syncJobsCol = db.collection<SyncJob>('sync_jobs');
 
-  // Block concurrent syncs
-  const alreadyRunning = await syncJobsCol.findOne({ status: 'running' });
-  if (alreadyRunning) {
-    return Response.json({ error: 'Sync already in progress' }, { status: 409 });
+  const runningAny = await syncJobsCol.findOne({ status: 'running', scope: { $in: scopes } });
+  if (runningAny) {
+    return Response.json({ error: `Sync already in progress for scope "${runningAny.scope}"` }, { status: 409 });
   }
 
   const encoder = new TextEncoder();
@@ -155,136 +327,17 @@ export async function GET(request: Request) {
         }
       };
 
-      // insertedId declared outside try so the catch block can reference it
-      let insertedId: import('mongodb').ObjectId | null = null;
-
-      try {
-        // ── Create sync job record ───────────────────────────────────────
-        const job: SyncJob = {
-          type,
-          status: 'running',
-          startedAt: new Date(),
-          completedAt: null,
-          patientsProcessed: 0,
-          patientsUpserted: 0,
-          doctorsUpserted: 0,
-          lastSyncedAt: null,
-          error: null,
-        };
-        ({ insertedId } = await syncJobsCol.insertOne(job));
-
-        // ── Determine incremental cutoff ─────────────────────────────────
-        let updatedSince: Date | null = null;
-        if (type === 'incremental') {
-          const lastJob = await syncJobsCol.findOne(
-            { status: 'complete' },
-            { sort: { completedAt: -1 } }
-          );
-          updatedSince = lastJob?.completedAt ?? null;
+      let anyFailed = false;
+      for (const scope of scopes) {
+        try {
+          await runScope(db, send, scope, type);
+        } catch {
+          anyFailed = true; // already reported via 'error' event; keep going to the next scope
         }
-
-        // ── Phase 1: Fetch patients from Cliniko ─────────────────────────
-        send({ phase: 'fetching', message: 'Fetching patients from Cliniko...', current: 0, total: 0 });
-
-        const allPatients: ClinikoPatient[] = [];
-        let page = 1;
-        let hasMore = true;
-        let totalEntries = 0;
-
-        while (hasMore) {
-          await sleep(REQUEST_DELAY_MS);
-          let endpoint = `/patients?page=${page}&per_page=100`;
-          if (updatedSince) endpoint += `&updated_since=${updatedSince.toISOString()}`;
-
-          const data = (await clinikoFetch(endpoint)) as ClinikioPatientsResponse;
-          allPatients.push(...data.patients);
-          totalEntries = data.total_entries;
-
-          send({ phase: 'fetching', message: 'Fetching patients from Cliniko...', current: allPatients.length, total: totalEntries });
-
-          hasMore = !!data.links?.next;
-          page++;
-          if (page > 200) break;
-        }
-
-        // ── Phase 2: Upsert patients + doctors into MongoDB ──────────────
-        send({ phase: 'processing', message: 'Saving to database...', current: 0, total: allPatients.length });
-
-        const doctorCache = new Map<string, string>();
-        let patientsUpserted = 0;
-        let doctorsUpserted = 0;
-
-        for (const p of allPatients) {
-          let referringDoctorId: string | null = null;
-
-          const doctorUrl = p.referring_doctor?.links?.self;
-          if (doctorUrl) {
-            const contactId = extractContactId(doctorUrl);
-            if (contactId) {
-              if (!doctorCache.has(contactId)) {
-                // Check MongoDB before hitting Cliniko
-                const existing = await doctorsCol.findOne({ _id: contactId });
-                if (existing) {
-                  doctorCache.set(contactId, existing.displayName);
-                } else {
-                  try {
-                    await sleep(REQUEST_DELAY_MS);
-                    const contact = (await clinikoFetch(`/contacts/${contactId}`)) as ClinikoContact;
-                    const displayName = buildDisplayName(contact);
-
-                    await doctorsCol.updateOne(
-                      { _id: contactId },
-                      { $set: { _id: contactId, firstName: contact.first_name ?? null, lastName: contact.last_name ?? null, companyName: contact.company_name ?? null, displayName, clinikoUrl: doctorUrl, syncedAt: new Date() } },
-                      { upsert: true }
-                    );
-
-                    doctorCache.set(contactId, displayName);
-                    doctorsUpserted++;
-                  } catch {
-                    console.error(`Failed to fetch contact ${contactId}`);
-                  }
-                }
-              }
-              referringDoctorId = contactId;
-            }
-          }
-
-          await patientsCol.updateOne(
-            { _id: String(p.id) },
-            { $set: { _id: String(p.id), firstName: p.first_name ?? '', lastName: p.last_name ?? '', clinikoCreatedAt: p.created_at ? new Date(p.created_at) : new Date(), clinikoUpdatedAt: p.updated_at ? new Date(p.updated_at) : new Date(), referringDoctorId, syncedAt: new Date(), isDeleted: false } },
-            { upsert: true }
-          );
-
-          patientsUpserted++;
-          if (patientsUpserted % 100 === 0 || patientsUpserted === allPatients.length) {
-            send({ phase: 'processing', message: 'Saving to database...', current: patientsUpserted, total: allPatients.length });
-          }
-        }
-
-        // ── Phase 3: Compute and store referral stats ────────────────────
-        send({ phase: 'computing', message: 'Computing referral statistics...' });
-        await computeAndStoreStats(db);
-
-        // ── Mark job complete ────────────────────────────────────────────
-        await syncJobsCol.updateOne(
-          { _id: insertedId },
-          { $set: { status: 'complete', completedAt: new Date(), patientsProcessed: allPatients.length, patientsUpserted, doctorsUpserted, lastSyncedAt: updatedSince } }
-        );
-
-        send({ phase: 'complete', success: true, patientsProcessed: allPatients.length, patientsUpserted, doctorsUpserted });
-
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        if (insertedId) {
-          await syncJobsCol.updateOne(
-            { _id: insertedId },
-            { $set: { status: 'failed', completedAt: new Date(), error: message } }
-          );
-        }
-        send({ phase: 'error', success: false, error: message });
-      } finally {
-        if (!streamClosed) controller.close();
       }
+
+      send({ phase: 'complete', success: !anyFailed, scopes });
+      if (!streamClosed) controller.close();
     },
   });
 

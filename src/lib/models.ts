@@ -7,6 +7,12 @@ export interface Patient {
   referringDoctorId: string | null;
   syncedAt: Date;
   isDeleted: boolean;
+  state: string | null;
+  postCode: string | null;
+  country: string | null;
+  email: string | null;
+  phone: string | null;
+  appointmentNotes: string | null;
 }
 
 export interface Doctor {
@@ -33,7 +39,18 @@ export interface ReferralStat {
   }[];
 }
 
+export interface ContactFailure {
+  contactId: string;
+  message: string;
+}
+
+// Each scope syncs and tracks its own incremental cutoff independently, so refreshing
+// appointments doesn't force a re-fetch of patients (or vice versa).
+export type SyncScope = 'patients' | 'appointments' | 'clinical';
+
 export interface SyncJob {
+  scope: SyncScope;
+  contactFailures?: ContactFailure[];
   type: 'full' | 'incremental';
   status: 'running' | 'complete' | 'failed';
   startedAt: Date;
@@ -41,6 +58,9 @@ export interface SyncJob {
   patientsProcessed: number;
   patientsUpserted: number;
   doctorsUpserted: number;
+  appointmentsUpserted: number;
+  attendeesUpserted: number;
+  patientCasesUpserted: number;
   lastSyncedAt: Date | null;  // The updatedAt cutoff used for incremental sync
   error: string | null;
 }
