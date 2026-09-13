@@ -163,7 +163,7 @@ export default function ReferralOverview() {
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-black/10 px-7 py-3.5">
           <span className="flex items-center gap-1.5 text-xs text-black/60">
             <span className="block h-1.5 w-1.5 rounded-full bg-[#14a3a8]" />
-            Cliniko
+            Cliniko Integrated Smart Dashboard
           </span>
           <button
             type="button"
@@ -175,7 +175,7 @@ export default function ReferralOverview() {
         </div>
         <div className="px-7 py-5">
           <Link
-            className="mb-1.5 inline-block text-xs font-semibold text-[#0b7276] hover:text-[#14a3a8]"
+            className="mb-1.5 inline-block text-lg font-semibold text-[#0b7276] hover:text-[#14a3a8]"
             href="/"
           >
             ← Back
@@ -358,7 +358,7 @@ export default function ReferralOverview() {
         </section>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <section className={`${card} flex flex-col gap-4`}>
+          {/* <section className={`${card} flex flex-col gap-4`}>
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <h2 className="text-base font-semibold tracking-tight">
                 Referral source mix
@@ -428,7 +428,7 @@ export default function ReferralOverview() {
                 </div>
               ))}
             </div>
-          </section>
+          </section> */}
           <section className={`${card} flex flex-col gap-3.5`}>
             <h2 className="text-base font-semibold tracking-tight">
               Needs attention

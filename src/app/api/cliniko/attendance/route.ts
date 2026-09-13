@@ -2,13 +2,13 @@ import { getDb } from '@/lib/mongodb';
 import { computeNoShowStats, computePatientMixStats } from '@/lib/attendance-stats';
 import type { PatientMixRange } from '@/lib/attendance-stats';
 
-const MIX_RANGES: PatientMixRange[] = ['Last week', 'Last month', 'Last quarter'];
+const MIX_RANGES: PatientMixRange[] = ['Last 7 Days', 'Last 30 Days', 'Year to Date', 'Last Year'];
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const rangeParam = searchParams.get('range');
-    const range = (MIX_RANGES as string[]).includes(rangeParam ?? '') ? (rangeParam as PatientMixRange) : 'Last month';
+    const range = (MIX_RANGES as string[]).includes(rangeParam ?? '') ? (rangeParam as PatientMixRange) : 'Last 30 Days';
 
     const db = await getDb();
     const [noShows, patientMix] = await Promise.all([

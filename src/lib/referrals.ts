@@ -1,5 +1,41 @@
 import type { Db } from 'mongodb';
-import type { ReferralStat, SyncJob } from './models';
+import type { Patient, ReferralStat, SyncJob } from './models';
+
+export interface ReferralVolumeStats {
+  count: number;
+  deltaPercent: number | null;
+}
+
+// Mirrors the referral_stats '7d' bucket (new patients with a referrer, trailing 7 days) but
+// also fetches the prior 7-day window so the KPI can show a week-over-week delta, which the
+// precomputed stats don't carry.
+export async function computeReferralVolumeStats(db: Db, now = new Date()): Promise<ReferralVolumeStats | null> {
+  // "Has patients ever synced" is checked separately from the windowed query below, so a
+  // genuinely quiet week (zero new referrals) reports as a real 0 rather than falling back to
+  // placeholder data.
+  const hasSynced = await db.collection<Patient>('patients').findOne({}, { projection: { _id: 1 } });
+  if (!hasSynced) return null;
+
+  const weekMs = 7 * 24 * 3600 * 1000;
+  const thisWeekStart = new Date(now.getTime() - weekMs);
+  const lastWeekStart = new Date(now.getTime() - 2 * weekMs);
+
+  const patients = await db.collection<Patient>('patients')
+    .find(
+      { isDeleted: false, referringDoctorId: { $ne: null }, clinikoCreatedAt: { $gte: lastWeekStart, $lt: now } },
+      { projection: { clinikoCreatedAt: 1 } },
+    )
+    .toArray();
+
+  let thisWeek = 0, lastWeek = 0;
+  for (const p of patients) {
+    if (new Date(p.clinikoCreatedAt) >= thisWeekStart) thisWeek++;
+    else lastWeek++;
+  }
+
+  const deltaPercent = lastWeek ? Math.round(((thisWeek - lastWeek) / lastWeek) * 1000) / 10 : null;
+  return { count: thisWeek, deltaPercent };
+}
 
 export async function readReferrals(db: Db) {
     // Check if a sync is currently running

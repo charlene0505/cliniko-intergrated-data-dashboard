@@ -39,6 +39,49 @@
   --color-warn-text: #6f5c12;
 }
 
+@keyframes shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@theme {
+  --animate-shimmer: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+
+@theme {
+  --animate-dot-pulse: dot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dot-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@theme {
+  --animate-dot-orbit: dot-orbit 1.8s linear infinite;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

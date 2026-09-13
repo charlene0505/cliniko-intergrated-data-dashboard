@@ -33,6 +33,7 @@ interface ClinikoPatient {
   email?: string;
   patient_phone_numbers?: ClinikoPhoneNumber[];
   appointment_notes?: string;
+  referral_source?: string;
 }
 
 interface ClinikioPatientsResponse {
@@ -237,6 +238,7 @@ async function runPatientsSync(db: Db, send: (data: object) => void, since: Date
         referringDoctorId, syncedAt: new Date(), isDeleted: false,
         state: p.state ?? null, postCode: p.post_code ?? null, country: p.country ?? null,
         email: p.email ?? null, phone: pickPhone(p.patient_phone_numbers), appointmentNotes: p.appointment_notes ?? null,
+        referralSource: p.referral_source ?? null,
       } },
       { upsert: true }
     );

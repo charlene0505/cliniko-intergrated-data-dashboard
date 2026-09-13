@@ -13,6 +13,7 @@ export interface Patient {
   email: string | null;
   phone: string | null;
   appointmentNotes: string | null;
+  referralSource: string | null;   // Cliniko's own "how did you hear about us" field, verbatim
 }
 
 export interface Doctor {
@@ -63,4 +64,58 @@ export interface SyncJob {
   patientCasesUpserted: number;
   lastSyncedAt: Date | null;  // The updatedAt cutoff used for incremental sync
   error: string | null;
+}
+
+// ── Reception: receptionists, their schedule, and internal tasks/messages ──
+//
+// Cliniko has no concept of these 3 people individually — every reception booking
+// is made under one shared practitioner ("Receptionist Receptionist"), so unlike
+// everything else in this file, these collections have no Cliniko source and are
+// authored directly through this app.
+
+export type Weekday = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
+
+export interface Receptionist {
+  _id: string;               // locally generated (no Cliniko source)
+  name: string;
+  role: 'receptionist' | 'reception_manager';
+}
+
+// The repeating weekly pattern, e.g. "works Tue/Thu/Sat at CBD". One row per
+// (receptionist, weekday) — small and static, only edited when someone's usual
+// days change.
+export interface RecurringShift {
+  _id: string;               // `${receptionistId}_${weekday}`
+  receptionistId: string;    // FK -> Receptionist._id
+  weekday: Weekday;
+  businessId: string;        // FK -> businesses._id
+}
+
+// A non-repeating exception for one calendar date — a swap, sick day, extra
+// day, or day off. Only exists where a specific date deviates from the
+// recurring pattern above; resolving "who's on today" checks here first and
+// falls back to RecurringShift.
+export interface ShiftOverride {
+  _id: string;               // `${date}_${businessId}`
+  date: string;               // "YYYY-MM-DD"
+  businessId: string;        // FK -> businesses._id
+  receptionistId: string | null;  // who's actually covering; null = nobody / closed
+  coveringFor?: string | null;    // FK -> Receptionist._id — who the recurring pattern would've had, for display
+  reason?: string | null;
+}
+
+// A task or a plain note, addressed to a receptionist or an existing
+// practitioner. One collection for both — a "message" just leaves the
+// task-only fields unset.
+export interface ReceptionMessage {
+  _id: string;
+  kind: 'task' | 'message';
+  text: string;
+  recipient: { type: 'receptionist' | 'practitioner'; id: string };
+  senderName: string;         // from the logged-in session (AuthUser.username)
+  priority?: 'High' | 'Routine';
+  dueDate?: Date | null;
+  completedAt?: Date | null;
+  completedBy?: string | null;
+  createdAt: Date;
 }

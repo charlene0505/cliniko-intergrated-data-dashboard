@@ -1,4 +1,4 @@
-import type { Db } from 'mongodb';
+import type { Db } from "mongodb";
 
 interface StoredAppointment {
   _id: string;
@@ -27,65 +27,139 @@ export interface NoShowStats {
 }
 
 export interface PatientMixStats {
-  monthly: { label: string; newCount: number; totalCount: number; percent: number }[];
+  monthly: {
+    label: string;
+    newCount: number;
+    totalCount: number;
+    percent: number;
+  }[];
 }
 
-export type PatientMixRange = 'Last week' | 'Last month' | 'Last quarter';
+export type PatientMixRange =
+  | "Last 7 Days"
+  | "Last 30 Days"
+  | "Year to Date"
+  | "Last Year";
+
+export interface TodayApptStats {
+  completed: number;
+  remaining: number;
+}
+
+export interface AppointmentVolumeStats {
+  count: number;
+  deltaPercent: number | null;
+}
 
 function buildMixBuckets(range: PatientMixRange, now: Date) {
-  if (range === 'Last week') {
+  if (range === "Last 7 Days") {
     // 7 daily buckets — include the date, not just the weekday name, so consecutive weeks
     // (or a week spanning a month boundary) are never ambiguous.
     return Array.from({ length: 7 }, (_, i) => {
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - i));
-      const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
-      return { label: `${start.toLocaleString('en-AU', { weekday: 'short' })} ${start.getDate()}`, start: start.getTime(), end: end.getTime() };
+      const start = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - (6 - i),
+      );
+      const end = new Date(
+        start.getFullYear(),
+        start.getMonth(),
+        start.getDate() + 1,
+      );
+      return {
+        label: `${start.toLocaleString("en-AU", { weekday: "short" })} ${start.getDate()}`,
+        start: start.getTime(),
+        end: end.getTime(),
+      };
     });
   }
-  if (range === 'Last quarter') {
-    // 3 monthly buckets
-    return Array.from({ length: 3 }, (_, i) => {
-      const start = new Date(now.getFullYear(), now.getMonth() - (2 - i), 1);
+  if (range === "Year to Date") {
+    // One monthly bucket per elapsed month this year (1 in January, up to 12 in December).
+    const months = now.getMonth() + 1;
+    return Array.from({ length: months }, (_, i) => {
+      const start = new Date(now.getFullYear(), i, 1);
       const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-      return { label: start.toLocaleString('en-AU', { month: 'short' }), start: start.getTime(), end: end.getTime() };
+      return {
+        label: start.toLocaleString("en-AU", { month: "short" }),
+        start: start.getTime(),
+        end: end.getTime(),
+      };
     });
   }
-  // 'Last month': 4 trailing 7-day weeks
+  if (range === "Last Year") {
+    // 12 trailing monthly buckets
+    return Array.from({ length: 12 }, (_, i) => {
+      const start = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+      const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+      return {
+        label: start.toLocaleString("en-AU", { month: "short" }),
+        start: start.getTime(),
+        end: end.getTime(),
+      };
+    });
+  }
+  // 'Last 30 Days': 4 trailing 7-day weeks
   return Array.from({ length: 4 }, (_, i) => {
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (3 - i) * 7 + 1);
-    const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 7);
-    return { label: `${start.getDate()}/${start.getMonth() + 1}`, start: start.getTime(), end: end.getTime() };
+    const end = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - (3 - i) * 7 + 1,
+    );
+    const start = new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      end.getDate() - 7,
+    );
+    return {
+      label: `${start.getDate()}/${start.getMonth() + 1}`,
+      start: start.getTime(),
+      end: end.getTime(),
+    };
   });
 }
 
 async function loadClinical(db: Db) {
   const [appointments, attendees] = await Promise.all([
-    db.collection<StoredAppointment>('appointments').find({}).toArray(),
-    db.collection<StoredAttendee>('attendees').find({}).toArray(),
+    db.collection<StoredAppointment>("appointments").find({}).toArray(),
+    db.collection<StoredAttendee>("attendees").find({}).toArray(),
   ]);
   return { appointments, attendees };
 }
 
 // A visit is "flagged" if the patient didn't arrive, or cancelled less than 24h before the appointment.
 function isLateCancellation(cancelledAt: Date | null, startsAt: Date): boolean {
-  return !!cancelledAt && cancelledAt <= startsAt && startsAt.getTime() - cancelledAt.getTime() < 24 * 3600 * 1000;
+  return (
+    !!cancelledAt &&
+    cancelledAt <= startsAt &&
+    startsAt.getTime() - cancelledAt.getTime() < 24 * 3600 * 1000
+  );
 }
 
-export async function computeNoShowStats(db: Db, now = new Date()): Promise<NoShowStats | null> {
+export async function computeNoShowStats(
+  db: Db,
+  now = new Date(),
+): Promise<NoShowStats | null> {
   const { appointments, attendees } = await loadClinical(db);
   if (!appointments.length) return null;
-  const byAppt = new Map(appointments.map(a => [a._id, a]));
+  const byAppt = new Map(appointments.map((a) => [a._id, a]));
 
   const MONTHS = 8;
   const buckets = Array.from({ length: MONTHS }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (MONTHS - 1 - i), 1);
-    return { label: d.toLocaleString('en-AU', { month: 'short' }), year: d.getFullYear(), month: d.getMonth(), total: 0, flagged: 0 };
+    return {
+      label: d.toLocaleString("en-AU", { month: "short" }),
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      total: 0,
+      flagged: 0,
+    };
   });
   const windowStart = new Date(buckets[0].year, buckets[0].month, 1);
 
   // The headline rate/count is scoped to the exact same trailing window as the monthly chart —
   // not "everything we've ever synced" — so the two numbers always describe the same period.
-  let total = 0, flagged = 0;
+  let total = 0,
+    flagged = 0;
   for (const at of attendees) {
     if (at.archivedAt || at.deletedAt) continue;
     const appt = byAppt.get(at.appointmentId);
@@ -93,28 +167,53 @@ export async function computeNoShowStats(db: Db, now = new Date()): Promise<NoSh
     const startsAt = new Date(appt.startsAt);
     if (startsAt > now || startsAt < windowStart) continue;
 
-    const cancelledAt = at.cancelledAt ? new Date(at.cancelledAt) : appt.cancelledAt ? new Date(appt.cancelledAt) : null;
-    const isFlagged = appt.didNotArrive === true || isLateCancellation(cancelledAt, startsAt);
+    const cancelledAt = at.cancelledAt
+      ? new Date(at.cancelledAt)
+      : appt.cancelledAt
+        ? new Date(appt.cancelledAt)
+        : null;
+    const isFlagged =
+      appt.didNotArrive === true || isLateCancellation(cancelledAt, startsAt);
 
     total++;
     if (isFlagged) flagged++;
-    const bucket = buckets.find(b => b.year === startsAt.getFullYear() && b.month === startsAt.getMonth());
-    if (bucket) { bucket.total++; if (isFlagged) bucket.flagged++; }
+    const bucket = buckets.find(
+      (b) =>
+        b.year === startsAt.getFullYear() && b.month === startsAt.getMonth(),
+    );
+    if (bucket) {
+      bucket.total++;
+      if (isFlagged) bucket.flagged++;
+    }
   }
 
-  const monthly = buckets.map(b => ({ label: b.label, percent: b.total ? Math.round((b.flagged / b.total) * 1000) / 10 : 0 }));
+  const monthly = buckets.map((b) => ({
+    label: b.label,
+    percent: b.total ? Math.round((b.flagged / b.total) * 1000) / 10 : 0,
+  }));
   const ratePercent = total ? Math.round((flagged / total) * 1000) / 10 : 0;
   const last = monthly[monthly.length - 1]?.percent ?? 0;
   const prev = monthly[monthly.length - 2]?.percent ?? last;
   const periodLabel = `${buckets[0].label}–${buckets[buckets.length - 1].label} ${buckets[buckets.length - 1].year}`;
 
-  return { ratePercent, deltaPts: Math.round((last - prev) * 10) / 10, totalBooked: total, flaggedCount: flagged, periodLabel, monthly };
+  return {
+    ratePercent,
+    deltaPts: Math.round((last - prev) * 10) / 10,
+    totalBooked: total,
+    flaggedCount: flagged,
+    periodLabel,
+    monthly,
+  };
 }
 
-export async function computePatientMixStats(db: Db, range: PatientMixRange = 'Last month', now = new Date()): Promise<PatientMixStats | null> {
+export async function computePatientMixStats(
+  db: Db,
+  range: PatientMixRange = "Last 30 Days",
+  now = new Date(),
+): Promise<PatientMixStats | null> {
   const { appointments, attendees } = await loadClinical(db);
   if (!appointments.length) return null;
-  const byAppt = new Map(appointments.map(a => [a._id, a]));
+  const byAppt = new Map(appointments.map((a) => [a._id, a]));
 
   // A patient counts as "new" in a period if their oldest recorded visit (their first-ever
   // appointment, by our data) falls inside that period; every other patient who visited during
@@ -125,29 +224,103 @@ export async function computePatientMixStats(db: Db, range: PatientMixRange = 'L
   for (const at of attendees) {
     if (at.archivedAt || at.deletedAt) continue;
     const appt = byAppt.get(at.appointmentId);
-    if (!appt || appt.archivedAt || appt.deletedAt || appt.didNotArrive) continue;
+    if (!appt || appt.archivedAt || appt.deletedAt || appt.didNotArrive)
+      continue;
     if (at.cancelledAt || appt.cancelledAt) continue;
     const startsAt = new Date(appt.startsAt);
     if (startsAt > now) continue;
-    if (!visitsByPatient.has(at.patientId)) visitsByPatient.set(at.patientId, []);
+    if (!visitsByPatient.has(at.patientId))
+      visitsByPatient.set(at.patientId, []);
     visitsByPatient.get(at.patientId)!.push(startsAt);
   }
 
-  const buckets = buildMixBuckets(range, now).map(b => ({ ...b, newCount: 0, totalCount: 0 }));
+  const buckets = buildMixBuckets(range, now).map((b) => ({
+    ...b,
+    newCount: 0,
+    totalCount: 0,
+  }));
 
   for (const [, dates] of visitsByPatient) {
-    const oldestVisit = Math.min(...dates.map(d => d.getTime()));
+    const oldestVisit = Math.min(...dates.map((d) => d.getTime()));
     for (const bucket of buckets) {
-      if (!dates.some(d => d.getTime() >= bucket.start && d.getTime() < bucket.end)) continue;
+      if (
+        !dates.some(
+          (d) => d.getTime() >= bucket.start && d.getTime() < bucket.end,
+        )
+      )
+        continue;
       bucket.totalCount++;
-      if (oldestVisit >= bucket.start && oldestVisit < bucket.end) bucket.newCount++;
+      if (oldestVisit >= bucket.start && oldestVisit < bucket.end)
+        bucket.newCount++;
     }
   }
 
   return {
-    monthly: buckets.map(b => ({
-      label: b.label, newCount: b.newCount, totalCount: b.totalCount,
-      percent: b.totalCount ? Math.round((b.newCount / b.totalCount) * 1000) / 10 : 0,
+    monthly: buckets.map((b) => ({
+      label: b.label,
+      newCount: b.newCount,
+      totalCount: b.totalCount,
+      percent: b.totalCount
+        ? Math.round((b.newCount / b.totalCount) * 1000) / 10
+        : 0,
     })),
   };
+}
+
+function isLiveAppointment(a: StoredAppointment): boolean {
+  return !a.cancelledAt && !a.archivedAt && !a.deletedAt;
+}
+
+export async function computeTodayApptStats(
+  db: Db,
+  now = new Date(),
+): Promise<TodayApptStats | null> {
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 3600 * 1000);
+  const appointments = await db
+    .collection<StoredAppointment>("appointments")
+    .find({})
+    .toArray();
+  // Distinguish "nothing synced yet" (null, so the caller falls back to placeholder data) from
+  // "synced, but genuinely zero appointments today" (a real {0, 0} — e.g. a Sunday closure).
+  if (!appointments.length) return null;
+
+  const today = appointments.filter((a) => {
+    if (!isLiveAppointment(a)) return false;
+    const startsAt = new Date(a.startsAt);
+    return startsAt >= startOfDay && startsAt < endOfDay;
+  });
+
+  const completed = today.filter((a) => new Date(a.startsAt) <= now).length;
+  return { completed, remaining: today.length - completed };
+}
+
+// Compares the trailing 7 days against the 7 days before that, so the KPI's "+8% than last
+// week" reads the same trailing window every time it's viewed, not a fixed calendar week.
+export async function computeAppointmentVolumeStats(
+  db: Db,
+  now = new Date(),
+): Promise<AppointmentVolumeStats | null> {
+  const weekMs = 7 * 24 * 3600 * 1000;
+  const thisWeekStart = new Date(now.getTime() - weekMs);
+  const lastWeekStart = new Date(now.getTime() - 2 * weekMs);
+  const appointments = await db
+    .collection<StoredAppointment>("appointments")
+    .find({})
+    .toArray();
+  if (!appointments.length) return null;
+
+  let thisWeek = 0,
+    lastWeek = 0;
+  for (const a of appointments) {
+    if (!isLiveAppointment(a)) continue;
+    const startsAt = new Date(a.startsAt);
+    if (startsAt >= thisWeekStart && startsAt < now) thisWeek++;
+    else if (startsAt >= lastWeekStart && startsAt < thisWeekStart) lastWeek++;
+  }
+
+  const deltaPercent = lastWeek
+    ? Math.round(((thisWeek - lastWeek) / lastWeek) * 1000) / 10
+    : null;
+  return { count: thisWeek, deltaPercent };
 }

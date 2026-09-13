@@ -115,6 +115,9 @@ export async function syncAppointments(
       didNotArrive: b.did_not_arrive === true,
       practitionerId: id(b.practitioner),
       businessId: id(b.business),
+      notes: str(b.notes),
+      blockTypeId: id(b.unavailable_block_type),
+      appointmentTypeId: id(b.appointment_type),
     };
   });
   await upsertAll(db, "appointments", bookings);
@@ -144,6 +147,7 @@ export async function syncAppointments(
       archivedAt: str(a.archived_at),
       deletedAt: str(a.deleted_at),
       arrived: typeof a.arrived === "boolean" ? a.arrived : null,
+      notes: str(a.notes),
     };
   });
   await upsertAll(db, "attendees", attendees);
@@ -172,11 +176,13 @@ export async function syncClinicalOthers(
     const patientId = id(c.patient);
     if (!patientId || typeof c.name !== "string")
       throw new Error("Patient case is missing its patient or name");
+    const referralType = c.referral_type === "medicare" || c.referral_type === "dva" ? c.referral_type : null;
     return {
       _id: String(c.id),
       patientId,
       name: c.name,
-      isEpc: isEpcCase(c.name),
+      referralType,
+      isEpc: isEpcCase(referralType),
       maxSessions: typeof c.max_sessions === "number" ? c.max_sessions : null,
       issueDate: str(c.issue_date),
       expiryDate: str(c.expiry_date),
@@ -197,6 +203,20 @@ export async function syncClinicalOthers(
     "practitioners",
   );
   const businesses = await fetchClinicalPages("/businesses", "businesses");
+  // Small, mostly-static list of block categories (LUNCH, TRAVEL, "TO DO (Receptionist Only)",
+  // "Messages", etc.) — bookings under the shared reception-desk practitioner reference one of
+  // these by id, and it's what lets the briefing tell a message/to-do apart from a lunch break.
+  const blockTypes = await fetchClinicalPages(
+    "/unavailable_block_types",
+    "unavailable_block_types",
+  );
+  // Practice-defined appointment types (e.g. "Physiotherapy: Workcover 1 Area Initial",
+  // "Physiotherapy: NDIS In Clinic") — a small, bounded vocabulary that bakes the funding source
+  // into the name itself, unlike patient_cases.name which is unbounded free text.
+  const appointmentTypes = await fetchClinicalPages(
+    "/appointment_types",
+    "appointment_types",
+  );
   await upsertAll(
     db,
     "practitioners",
@@ -211,6 +231,22 @@ export async function syncClinicalOthers(
     businesses.map((b) => ({
       _id: String(b.id),
       name: str(b.business_name) ?? str(b.name) ?? "Not recorded",
+    })),
+  );
+  await upsertAll(
+    db,
+    "unavailable_block_types",
+    blockTypes.map((t) => ({
+      _id: String(t.id),
+      name: typeof t.name === "string" ? t.name : "Unknown",
+    })),
+  );
+  await upsertAll(
+    db,
+    "appointment_types",
+    appointmentTypes.map((t) => ({
+      _id: String(t.id),
+      name: typeof t.name === "string" ? t.name : "Unknown",
     })),
   );
 

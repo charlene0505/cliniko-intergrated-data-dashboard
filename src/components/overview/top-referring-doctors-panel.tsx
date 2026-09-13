@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReferralStat } from "@/lib/models";
 import { PeriodSelector } from "./period-selector";
+import { useEnterAnimation } from "@/lib/use-enter-animation";
 import { link, panel, panelHeaderArrow, panelHeaderLink, panelHeaderTitle, track } from "./ui";
 
 type Doctor = { doctorId: string; displayName: string; count: number };
@@ -20,8 +21,10 @@ export function TopReferringDoctorsPanel({
   onRangeChange: (v: string) => void;
   onPreviewCustomRange: () => void;
 }) {
+  const entered = useEnterAnimation(doctors);
+
   return (
-    <section className={panel}>
+    <section className={`${panel} h-full`}>
       <Link href="/referrals" className={panelHeaderLink}>
         <h2 className={panelHeaderTitle}>Top referring doctors</h2>
         <span className={panelHeaderArrow}>→</span>
@@ -29,7 +32,7 @@ export function TopReferringDoctorsPanel({
       <div className="flex flex-col gap-4 p-6">
         <PeriodSelector value={doctorRange} onChange={onRangeChange} onApplyCustomRange={onPreviewCustomRange} />
         <div className="flex flex-col gap-3">
-          {doctors?.map((d) => {
+          {doctors?.map((d, i) => {
             const match = d.displayName.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
             const name = match ? match[1] : d.displayName;
             const practiceName = match ? match[2] : "";
@@ -43,7 +46,10 @@ export function TopReferringDoctorsPanel({
                   <strong className="text-sm font-extrabold tabular-nums">{d.count}</strong>
                 </div>
                 <div className={track}>
-                  <div className="h-2 rounded-full bg-teal-500" style={{ width: `${(d.count / doctorsMax) * 100}%` }} />
+                  <div
+                    className="h-2 rounded-full bg-teal-500 transition-[width] duration-1000 ease-out"
+                    style={{ width: entered ? `${(d.count / doctorsMax) * 100}%` : "0%", transitionDelay: `${i * 60}ms` }}
+                  />
                 </div>
               </div>
             );
