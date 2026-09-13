@@ -6,7 +6,7 @@ A Next.js dashboard that displays patient referral data by referring doctors, so
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) v20 or later
+- [Node.js](https://nodejs.org/) v22 (run `nvm use`)
 - [pnpm](https://pnpm.io/) v10 — install with `npm install -g pnpm`
 - A Cliniko account with an API key
 - (Optional) [Docker](https://www.docker.com/) for containerised runs
@@ -25,8 +25,16 @@ Edit `.env.local`:
 
 ```env
 CLINIKO_API_KEY=your_api_key_here
-CLINIKO_SHARD=au1        # your Cliniko shard, e.g. au1, au2, us1
+CLINIKO_SHARD=au1
+MONGODB_URI=mongodb+srv://USER:PASSWORD@HOST/shp
+AUTH_ADMIN_PASSWORD=choose-a-password
+AUTH_OWNER_PASSWORD=choose-a-different-password
+AUTH_PHYSIO_PASSWORD=choose-another-password
+JWT_SECRET=replace-with-a-random-secret
+CRON_SECRET=replace-with-a-different-random-secret
 ```
+
+The login names are `admin`, `owner`, and `physio`. Their passwords come from the corresponding `AUTH_*_PASSWORD` variables; an empty value disables that account. `JWT_SECRET` is required to sign sessions and has no fallback. Generate separate random secrets with `openssl rand -hex 32`. Keep `.env.local` out of Git.
 
 **How to find your API key:** In Cliniko, go to **My Info → API Keys → Generate API key**.  
 **How to find your shard:** It's in your Cliniko URL — e.g. `https://api.au1.cliniko.com` → shard is `au1`.
@@ -111,6 +119,24 @@ Set your environment variables in the Vercel dashboard under **Project → Setti
 |---|---|
 | `CLINIKO_API_KEY` | Your Cliniko API key |
 | `CLINIKO_SHARD` | Your shard (e.g. `au1`) |
+| `MONGODB_URI` | Connection string including the database name |
+| `AUTH_ADMIN_PASSWORD` | Admin login password |
+| `AUTH_OWNER_PASSWORD` | Owner login password |
+| `AUTH_PHYSIO_PASSWORD` | Physio login password |
+| `JWT_SECRET` | Random session-signing secret |
+| `CRON_SECRET` | Separate random secret for scheduled sync requests |
+
+Set these for **Production** before redeploying. Local `.env.local` values are not automatically copied into Vercel.
+
+### Daily sync
+
+`vercel.json` contains one full sync: `0 2 * * *` (daily at 02:00 UTC; noon Sydney standard time or 1 pm daylight time). Vercel Hobby runs it within that hour, not necessarily at the exact minute. The previous hourly schedule is unsupported on Hobby and causes deployment rejection. See [Vercel cron limits](https://vercel.com/docs/cron-jobs/usage-and-pricing).
+
+Vercel sends `CRON_SECRET` as a bearer token. The middleware permits that token only for `/api/sync`; the route also checks authentication. Scheduled jobs run on production deployments. Manual **Sync Now** remains available independently of the daily schedule.
+
+### Contact errors
+
+A failed contact lookup or save emits a warning with the contact ID and HTTP status when available. The sync continues, attempts each failed contact only once per run, and saves warnings in `sync_jobs.contactFailures`. The dashboard displays warnings during the sync and from the last completed sync after refresh. Use **Retry full sync** to retry missing contacts, including those linked to unchanged patients. Old syncs cannot recover error details that were never recorded.
 
 ---
 
@@ -145,8 +171,12 @@ src/
 
 ## How It Works
 
-1. The dashboard calls `/api/cliniko/referrals` on load.
-2. That endpoint fetches all patients from Cliniko (paginated, up to 200 pages).
-3. For each patient with a referring doctor, it fetches the doctor's contact details.
-4. Results stream back to the browser in real time via Server-Sent Events (SSE).
-5. The dashboard displays the top 20 referring doctors and their patient counts.
+1. The dashboard reads precomputed referral statistics from MongoDB through `/api/cliniko/referrals`.
+2. An initial, manual, or scheduled sync fetches patients and referring-doctor contacts from Cliniko.
+3. The sync saves patients, doctors, and job details to MongoDB, then computes statistics for each period.
+4. Manual sync progress and contact warnings stream back via Server-Sent Events (SSE).
+5. The dashboard displays the top 20 referring doctors for the selected period.
+
+## Regression checks
+
+Run `node --test tests/regressions.mjs` to check environment-based authentication, cron routing, and contact failure reporting with mocked services. Run `pnpm lint` and `pnpm exec tsc --noEmit` for static checks.

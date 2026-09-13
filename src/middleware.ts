@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySessionToken } from '@/lib/auth';
+import { verifySessionToken, isCronRequest } from '@/lib/auth';
 
 // Routes that don't require authentication
-const PUBLIC_PATHS = ['/login', '/api/auth/login'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/showcase', '/api/showcase/referrals', '/api/showcase/patients'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  if (pathname === '/api/sync' && isCronRequest(request)) {
+    return NextResponse.next();
+  }
+
   // Allow public paths through
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+  if (PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.next();
   }
 
