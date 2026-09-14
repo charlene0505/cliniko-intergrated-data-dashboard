@@ -311,6 +311,19 @@ async function runScope(db: Db, send: (data: object) => void, scope: SyncScope, 
 
 // ── Main sync handler ──────────────────────────────────────────────────────
 
+// A job still "running" after this long isn't running any more. When a hosting time limit ends the
+// request, the function is stopped outright, so runScope's catch never gets to mark the job failed —
+// and a job left "running" makes every later sync of that scope get refused as already in progress.
+// The longest real scope has taken ~5.5 minutes (a full appointments sync), so 15 leaves ample margin.
+const STALE_JOB_MS = 15 * 60 * 1000;
+
+async function failStaleJobs(db: Db) {
+  await db.collection<SyncJob>('sync_jobs').updateMany(
+    { status: 'running', startedAt: { $lt: new Date(Date.now() - STALE_JOB_MS) } },
+    { $set: { status: 'failed', completedAt: new Date(), error: 'Stopped without finishing: still marked running after 15 minutes (most likely the request hit a hosting time limit).' } },
+  );
+}
+
 export async function GET(request: Request) {
   if (!isCronRequest(request) && !(await getSession())) {
     return Response.json({ error: 'Authentication required' }, { status: 401 });
@@ -323,6 +336,7 @@ export async function GET(request: Request) {
   const db = await getDb();
   const syncJobsCol = db.collection<SyncJob>('sync_jobs');
 
+  await failStaleJobs(db);
   const runningAny = await syncJobsCol.findOne({ status: 'running', scope: { $in: scopes } });
   if (runningAny) {
     return Response.json({ error: `Sync already in progress for scope "${runningAny.scope}"` }, { status: 409 });

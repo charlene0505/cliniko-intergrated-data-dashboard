@@ -71,7 +71,7 @@ export function OverviewHeader({
 }: {
   lastSyncedAt: string | null;
   onLogout: () => void;
-  kpis: readonly (readonly [string, string, string])[];
+  kpis: readonly (readonly [label: string, value: string, delta: string, tooltip: string])[];
   greetingName: string | null;
   practice: PracticeChoice;
   onPracticeChange: (v: PracticeChoice) => void;
