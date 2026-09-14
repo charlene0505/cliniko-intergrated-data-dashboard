@@ -13,7 +13,9 @@ export async function GET(request: Request) {
     const mix = await readPatientMix(await getDb(), mode, range);
     if (!mix) return Response.json({ status: 'no_data', mode, ...range });
     return Response.json({ status: 'ok', mode, ...range, mix });
-  } catch {
+  } catch (error) {
+    // The client only sees a generic 503, so the real cause is logged here for whoever runs the server.
+    console.error(`Patient mix failed (mode: ${mode}, ${range.from} to ${range.to})`, error);
     return Response.json({ error: 'Unable to load patient mix.' }, { status: 503 });
   }
 }

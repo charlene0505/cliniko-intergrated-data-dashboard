@@ -26,9 +26,9 @@ const archivo = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "800
 // cache). Deliberately not realistic numbers: sample figures here were indistinguishable from real
 // practice data during that gap.
 const PENDING_KPIS = [
-  ["—", "Today", "Appointments"],
-  ["—", "—", "New referrals, compared to last week"],
-  ["—", "—", "Appointments, compared to last week"],
+  ["—", "—", "Today", "Appointments"],
+  ["—", "—", "—", "New referrals, compared to last week"],
+  ["—", "—", "—", "Appointments, compared to last week"],
 ] as const;
 
 const PRACTICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
@@ -246,15 +246,30 @@ export default function PracticeOverview({
   // page-load timer.
   const PANEL_STEP = 90;
 
-  const kpis: readonly (readonly [string, string, string])[] = [
+  const kpis: readonly (readonly [string, string, string, string])[] = [
     todayStats
-      ? [String(todayStats.completed + todayStats.remaining), 'Today', 'Appointments']
+      ? [
+          "Appt.",
+          String(todayStats.completed + todayStats.remaining),
+          "Today",
+          "Appointments",
+        ]
       : PENDING_KPIS[0],
     referralVolume
-      ? [String(referralVolume.count), formatDelta(referralVolume.deltaPercent), 'New referrals, compared to last week']
+      ? [
+          "Ref.",
+          String(referralVolume.count),
+          formatDelta(referralVolume.deltaPercent),
+          "New referrals, compared to last week",
+        ]
       : PENDING_KPIS[1],
     apptVolume
-      ? [String(apptVolume.count), formatDelta(apptVolume.deltaPercent), 'Appointments, compared to last week']
+      ? [
+          "Appt. W.",
+          String(apptVolume.count),
+          formatDelta(apptVolume.deltaPercent),
+          "Appointments, compared to last week",
+        ]
       : PENDING_KPIS[2],
   ];
 

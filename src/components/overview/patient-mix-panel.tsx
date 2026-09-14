@@ -60,7 +60,7 @@ export function PatientMixPanel({
 
   return (
     <section className={`${cardNoBg} flex h-full flex-col gap-4`}>
-      <h2 className="text-base font-semibold tracking-tight">Patient mix</h2>
+      <h2 className="text-base font-semibold tracking-tight">Patient Mix</h2>
       <div className="flex flex-row flex-wrap items-center justify-start gap-3">
         <Segments options={["Funding", "Referral source"]} value={mode} onChange={onModeChange} />
         <PeriodSelector value={period} onChange={onPeriodChange} />

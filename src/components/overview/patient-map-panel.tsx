@@ -184,19 +184,28 @@ export function PatientMapPanel({ fillHeight = false }: { fillHeight?: boolean }
   }
 
   return (
-    <section className={`${cardNoBg} flex ${fillHeight ? "h-115 lg:absolute lg:inset-0 lg:h-auto" : "h-115"} flex-col gap-3 overflow-hidden`}>
+    <section
+      className={`${cardNoBg} flex ${fillHeight ? "h-115 lg:absolute lg:inset-0 lg:h-auto" : "h-115"} flex-col gap-3 overflow-hidden`}
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold tracking-tight">Where patients live</h2>
+        <h2 className="text-base font-semibold tracking-tight">
+          Patient Locations
+        </h2>
         {data?.status === "ok" && (
           <p className="text-xs text-black/55">
             {mapped.toLocaleString("en-AU")} patients by home postcode
-            {outsideMap > 0 && ` · ${outsideMap.toLocaleString("en-AU")} live outside this map`}
+            {outsideMap > 0 &&
+              ` · ${outsideMap.toLocaleString("en-AU")} live outside this map`}
           </p>
         )}
       </div>
 
-      {!data && <p className="text-xs text-black/50">Loading patient postcodes…</p>}
-      {data?.status === "no_data" && <p className="text-xs text-black/50">No patient data yet.</p>}
+      {!data && (
+        <p className="text-xs text-black/50">Loading patient postcodes…</p>
+      )}
+      {data?.status === "no_data" && (
+        <p className="text-xs text-black/50">No patient data yet.</p>
+      )}
 
       {data?.status === "ok" && (
         <>
@@ -215,17 +224,29 @@ export function PatientMapPanel({ fillHeight = false }: { fillHeight?: boolean }
               role="img"
               aria-label={`Map of Sydney with a circle per postcode sized by patient count. Largest: ${circles
                 .slice(0, 3)
-                .map((c) => `${c.postcode}${c.region ? ` (${c.region})` : ""} ${c.patients} patients`)
+                .map(
+                  (c) =>
+                    `${c.postcode}${c.region ? ` (${c.region})` : ""} ${c.patients} patients`,
+                )
                 .join(", ")}.`}
               onPointerDown={onPointerDown}
               onPointerMove={(e) => {
                 if (dragRef.current) {
                   const rect = e.currentTarget.getBoundingClientRect();
-                  const unitsPerPixel = Math.min(mapView.width / rect.width, mapView.height / rect.height);
+                  const unitsPerPixel = Math.min(
+                    mapView.width / rect.width,
+                    mapView.height / rect.height,
+                  );
                   const dx = (e.clientX - dragRef.current.x) * unitsPerPixel;
                   const dy = (e.clientY - dragRef.current.y) * unitsPerPixel;
                   dragRef.current = { x: e.clientX, y: e.clientY };
-                  setMapView((current) => clampView({ ...current, x: current.x - dx, y: current.y - dy }));
+                  setMapView((current) =>
+                    clampView({
+                      ...current,
+                      x: current.x - dx,
+                      y: current.y - dy,
+                    }),
+                  );
                 } else {
                   onPointerMove(e);
                 }
@@ -237,7 +258,13 @@ export function PatientMapPanel({ fillHeight = false }: { fillHeight?: boolean }
               }}
             >
               {/* Postal areas as a faint land mesh — water is simply the page showing through. */}
-              <path d={basemap.path} fill="#ebe8e1" stroke={PAGE} strokeWidth={1.2} strokeLinejoin="round" />
+              <path
+                d={basemap.path}
+                fill="#ebe8e1"
+                stroke={PAGE}
+                strokeWidth={1.2}
+                strokeLinejoin="round"
+              />
 
               {circles.map((c) => {
                 const isHovered = c.postcode === hovered;
@@ -262,8 +289,20 @@ export function PatientMapPanel({ fillHeight = false }: { fillHeight?: boolean }
               })}
 
               {clinics.map((c) => (
-                <g key={c.label} transform={`translate(${c.x} ${c.y}) scale(${textScale})`}>
-                  <rect x={-5} y={-5} width={10} height={10} rx={2} fill={INK} stroke={PAGE} strokeWidth={2} />
+                <g
+                  key={c.label}
+                  transform={`translate(${c.x} ${c.y}) scale(${textScale})`}
+                >
+                  <rect
+                    x={-5}
+                    y={-5}
+                    width={10}
+                    height={10}
+                    rx={2}
+                    fill={INK}
+                    stroke={PAGE}
+                    strokeWidth={2}
+                  />
                   <text
                     x={9}
                     y={4}
@@ -281,20 +320,50 @@ export function PatientMapPanel({ fillHeight = false }: { fillHeight?: boolean }
             </svg>
 
             <div className="absolute right-2 top-2 z-20 flex overflow-hidden rounded-lg border border-black/10 bg-white/95 shadow-sm">
-              <button type="button" onClick={() => zoom(0.75)} className="h-8 w-8 text-lg font-semibold hover:bg-black/5" aria-label="Zoom in">+</button>
-              <button type="button" onClick={() => zoom(1.33)} className="h-8 w-8 border-l border-black/10 text-lg font-semibold hover:bg-black/5" aria-label="Zoom out">−</button>
-              <button type="button" onClick={() => setMapView(defaultViewForCanvas(canvasWidth))} className="h-8 border-l border-black/10 px-2 text-[10px] font-semibold uppercase tracking-wide hover:bg-black/5" aria-label="Reset map view">Reset</button>
+              <button
+                type="button"
+                onClick={() => zoom(0.75)}
+                className="h-8 w-8 text-lg font-semibold hover:bg-black/5"
+                aria-label="Zoom in"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => zoom(1.33)}
+                className="h-8 w-8 border-l border-black/10 text-lg font-semibold hover:bg-black/5"
+                aria-label="Zoom out"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapView(defaultViewForCanvas(canvasWidth))}
+                className="h-8 border-l border-black/10 px-2 text-[10px] font-semibold uppercase tracking-wide hover:bg-black/5"
+                aria-label="Reset map view"
+              >
+                Reset
+              </button>
             </div>
 
-            <div className="pointer-events-none absolute bottom-2 right-2 z-20 min-w-24 rounded-lg border border-black/10 bg-white/90 px-3 py-2 text-ink shadow-sm" aria-hidden="true">
+            <div
+              className="pointer-events-none absolute bottom-2 right-2 z-20 min-w-24 rounded-lg border border-black/10 bg-white/90 px-3 py-2 text-ink shadow-sm"
+              aria-hidden="true"
+            >
               <p className="mb-1.5 text-xs font-semibold">Patients</p>
               <div className="flex flex-col gap-1">
                 {legend.map((item, index) => {
                   const diameter = Math.max(5, 20 - index * 6);
                   return (
-                    <div key={item.value} className="flex items-center gap-2 text-[11px] tabular-nums text-black/65">
+                    <div
+                      key={item.value}
+                      className="flex items-center gap-2 text-[11px] tabular-nums text-black/65"
+                    >
                       <span className="flex w-5 items-center justify-center">
-                        <span className="block rounded-full border border-black/25 bg-teal-500/50" style={{ width: diameter, height: diameter }} />
+                        <span
+                          className="block rounded-full border border-black/25 bg-teal-500/50"
+                          style={{ width: diameter, height: diameter }}
+                        />
                       </span>
                       <span>{item.value.toLocaleString("en-AU")}</span>
                     </div>
@@ -311,7 +380,9 @@ export function PatientMapPanel({ fillHeight = false }: { fillHeight?: boolean }
                   top: `calc(${((hoveredCircle.y - hoveredCircle.r - mapView.y) / mapView.height) * 100}% - 6px)`,
                 }}
               >
-                <strong className="block text-sm font-semibold">{hoveredCircle.patients.toLocaleString("en-AU")} patients</strong>
+                <strong className="block text-sm font-semibold">
+                  {hoveredCircle.patients.toLocaleString("en-AU")} patients
+                </strong>
                 <span className="text-white/75">
                   {hoveredCircle.postcode}
                   {hoveredCircle.region ? ` · ${hoveredCircle.region}` : ""}
@@ -344,7 +415,8 @@ export function PatientMapPanel({ fillHeight = false }: { fillHeight?: boolean }
           </div>
 
           <p className="text-[10.5px] leading-snug text-black/45">
-            Each circle sits at the centre of a postal area; clinic markers sit at the centre of their own postcode. {basemap.attribution}.
+            Each circle sits at the centre of a postal area; clinic markers sit
+            at the centre of their own postcode. {basemap.attribution}.
           </p>
         </>
       )}

@@ -30,7 +30,7 @@ export default function CarePrograms() {
         </div>
         <div className="px-7 py-5">
           <Link className="mb-1.5 inline-block text-lg font-semibold text-teal-700 hover:text-teal-500" href="/">← Back</Link>
-          <h1 className="text-3xl font-semibold tracking-tight">Care program patients</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Case Management</h1>
           <div className="mt-4 flex gap-2" role="tablist" aria-label="Care program">
             {(["GPCCMP", "WC/CTP"] as const).map((item) => (
               <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors ${tab === item ? "bg-ink text-white" : "border border-black/10 bg-white text-black/60 hover:text-black"}`}>{item}</button>

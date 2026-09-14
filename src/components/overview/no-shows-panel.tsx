@@ -29,7 +29,7 @@ export function NoShowsPanel({ stats }: { stats: NoShowStats | null }) {
   return (
     <section className={`${cardNoBg} flex flex-col gap-3`}>
       <h2 className="text-base font-semibold tracking-tight">
-        No-shows &amp; late cancellations
+        No-shows and Late Cancellations
       </h2>
       {stats ? (
         <>

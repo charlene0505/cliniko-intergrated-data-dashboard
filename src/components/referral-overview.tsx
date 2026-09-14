@@ -249,7 +249,7 @@ export default function ReferralOverview() {
             ← Back
           </Link>
           <h1 className="text-3xl font-semibold tracking-tight">
-            Referral sources
+            Referral Sources
           </h1>
         </div>
       </header>
@@ -274,7 +274,7 @@ export default function ReferralOverview() {
         </div>
 
         <section className={`${card} flex flex-col gap-3.5`}>
-          <h2 className="text-base font-semibold tracking-tight">Referrals received per month</h2>
+          <h2 className="text-base font-semibold tracking-tight">Referrals Received</h2>
           <PeriodSelector value={trendRange} onChange={setTrendRange} />
           <div>
             {/* <div className="flex items-baseline gap-2.5 text-[34px] font-semibold tracking-tight">
@@ -321,7 +321,7 @@ export default function ReferralOverview() {
         <section className={`${card} pb-3`}>
           <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-3">
             <h2 className="text-base font-semibold tracking-tight">
-              Referring doctors
+              Referring Doctors
             </h2>
             <Range
               options={PERIODS.map((p) => p.label)}
@@ -504,7 +504,7 @@ export default function ReferralOverview() {
           </section> */}
           <section className={`${card} flex flex-col gap-3.5`}>
             <h2 className="text-base font-semibold tracking-tight">
-              Needs attention
+              Needs Attention
             </h2>
             <p className="text-xs leading-relaxed text-black/60">
               Referrers whose volume dropped, and practices you have never heard

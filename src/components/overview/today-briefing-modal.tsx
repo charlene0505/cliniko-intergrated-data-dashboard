@@ -3,9 +3,9 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useEnterAnimation } from "@/lib/use-enter-animation";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 import { useDataBlur } from "@/lib/data-blur";
-import { practiceDay } from "@/lib/date-range";
-import { CURATED_SUMMARIES } from "@/lib/today-briefing-curated";
+import { fixtureBriefing } from "@/lib/today-briefing-curated";
 
 interface NotePoint {
   text: string;
@@ -47,24 +47,9 @@ interface TodayBriefingResponse {
   nextShift?: DayBriefing;
 }
 
-// The curated entry is the CBD shift (business 73038); it carries no business name of its own.
-const PREFILLED_BUSINESS = "Sydney Health Physiotherapy - Sydney CBD";
-
-// The pre-filled briefing from today-briefing-curated.ts, re-dated so it reads as today's shift and as
-// tomorrow's for the next-shift preview. Curated summaries don't include reception notes.
+// The same stored briefing the admin login gets from the server (today + next shift, re-dated to today).
 function blurredBriefing(): TodayBriefingResponse {
-  const [curated] = Object.values(CURATED_SUMMARIES);
-  const summary: TodaySummary = { ...curated, receptionNotes: [] };
-  const today = practiceDay(new Date());
-  const tomorrow = practiceDay(new Date(Date.now() + 24 * 60 * 60 * 1000));
-  return {
-    status: "ok",
-    date: today,
-    businessName: PREFILLED_BUSINESS,
-    summary,
-    mocked: true,
-    nextShift: { date: tomorrow, businessName: PREFILLED_BUSINESS, summary, mocked: true },
-  };
+  return fixtureBriefing();
 }
 
 function AddToTodoButton({
@@ -202,11 +187,12 @@ function ReceptionNoteRow({
   );
 }
 
-// Decorative only — the next shift's data is already fetched by the time this shows, so the 2s
-// isn't a real network wait, just a deliberate pause before revealing the preview. The ring itself
-// orbits continuously (dot-orbit) so the dots visibly travel around the circle, while each dot
-// also pulses bigger/smaller on its own staggered timer (dot-pulse) as it goes.
-function BufferingSpinner() {
+// Decorative only — a deliberate pause before a briefing is revealed (2s for today's, 2s for the
+// next-shift preview), not a real network wait. If today's briefing is genuinely still loading after
+// that, the spinner simply stays up until it arrives. The ring itself orbits continuously (dot-orbit)
+// so the dots visibly travel around the circle, while each dot also pulses bigger/smaller on its own
+// staggered timer (dot-pulse) as it goes.
+function BufferingSpinner({ label }: { label: string }) {
   const dots = Array.from({ length: 5 });
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-10">
@@ -224,7 +210,7 @@ function BufferingSpinner() {
           );
         })}
       </div>
-      <p className="text-xs text-black/50">Analyzing next shift…</p>
+      <p className="text-xs text-black/50">{label}</p>
     </div>
   );
 }
@@ -317,6 +303,8 @@ export function TodayBriefingButton({ onClose, existingTaskTexts }: { onClose?: 
   const [view, setView] = useState<"current" | "next">("current");
   const [buffering, setBuffering] = useState(false);
   const [blurred] = useDataBlur();
+  // The page behind stays put while the popup is open; only the popup's own content scrolls.
+  useScrollLock(open);
   // Bumped on every open, so a response from an earlier open — e.g. a slow real briefing that lands
   // after data blur was switched on — can't overwrite what's on screen now.
   const requestId = useRef(0);
@@ -325,7 +313,12 @@ export function TodayBriefingButton({ onClose, existingTaskTexts }: { onClose?: 
     const id = ++requestId.current;
     setOpen(true);
     setView("current");
-    setBuffering(false);
+    // A deliberate 2s "analyzing" pause before today's briefing is revealed, on every open. Tied to this
+    // open's id, so closing and reopening mid-pause can't end the new open's pause early.
+    setBuffering(true);
+    setTimeout(() => {
+      if (id === requestId.current) setBuffering(false);
+    }, 2000);
     // With data blur on, the server is never queried: the pre-filled curated briefing is shown instead.
     if (blurred) {
       setData(blurredBriefing());
@@ -414,29 +407,32 @@ export function TodayBriefingButton({ onClose, existingTaskTexts }: { onClose?: 
               </button>
             </div>
 
-            {loading && <p className="text-xs text-black/50">Loading…</p>}
+            {/* Stays up for the 2s pause and for however long the briefing actually takes beyond it. */}
+            {view === "current" && (loading || buffering) && <BufferingSpinner label="Analyzing today's shift…" />}
 
-            {!loading && data?.status === "no_identity" && (
+            {!(loading || buffering) && data?.status === "no_identity" && (
               <p className="text-xs text-black/50">
                 This login isn&apos;t linked to a receptionist yet.
               </p>
             )}
-            {!loading && data?.status === "error" && (
+            {!(loading || buffering) && data?.status === "error" && (
               <p className="text-xs text-black/50">
                 Unable to load today&apos;s briefing.
               </p>
             )}
 
-            {!loading && view === "current" && data?.status === "not_scheduled" && (
+            {!(loading || buffering) && view === "current" && data?.status === "not_scheduled" && (
               <p className="text-xs text-black/50">Not rostered at any practice today</p>
             )}
-            {!loading && view === "current" && data?.status === "ok" && data.summary && (
+            {!(loading || buffering) && view === "current" && data?.status === "ok" && data.summary && (
               <DayBriefingSections
                 day={{ date: data.date ?? "", businessName: data.businessName, summary: data.summary, mocked: data.mocked }}
                 existingTaskTexts={existingTaskTexts ?? new Set()}
               />
             )}
-            {!loading && view === "current" && data?.nextShift && (
+            {/* The next-shift preview is only offered when there's no briefing for today — with today's
+                shift on screen, it's hidden entirely (the admin login's stored response still carries one). */}
+            {!(loading || buffering) && view === "current" && data?.status !== "ok" && data?.nextShift && (
               <div className="inline-block w-auto self-start animate-shimmer rounded-full bg-[length:200%_200%] bg-gradient-to-r from-banner-semiLight via-clay-light to-banner p-[1.5px] shadow-[0_0_10px_rgba(20,163,168,0.25)] transition-shadow hover:shadow-[0_0_16px_rgba(20,163,168,0.4)]">
                 <button
                   type="button"
@@ -460,7 +456,7 @@ export function TodayBriefingButton({ onClose, existingTaskTexts }: { onClose?: 
             {!loading && view === "next" && (
               <>
                 {buffering ? (
-                  <BufferingSpinner />
+                  <BufferingSpinner label="Analyzing next shift…" />
                 ) : (
                   data?.nextShift && (
                     <div className="flex flex-col gap-4">

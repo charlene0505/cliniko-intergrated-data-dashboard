@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { useSessionCache, writeSessionCache } from "./session-cache";
 
+// A failed load is retried after these waits before the panel is told it failed, so a transient blip
+// (the dev server recompiling mid-request, a dropped database connection) recovers on its own rather
+// than leaving a "try again shortly" message that nothing ever retries.
+const RETRY_DELAYS_MS = [1000, 3000];
+
 // Stale-while-revalidate fetch for the dashboard's range-driven panels:
 // - a key this tab has already loaded renders straight from the session cache, with no request wait;
 // - while a new key is in flight, the last response shown stays on screen (`isStale`) instead of the
@@ -22,18 +27,35 @@ export function useCachedFetch<T>(key: string, url: string): { data: T | null; i
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(url, { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data: T) => {
-        writeSessionCache(key, data);
-        setFailedKey(null);
-      })
-      .catch((error: unknown) => {
-        if ((error as { name?: string })?.name !== "AbortError") setFailedKey(key);
-      });
+
+    async function load() {
+      for (let attempt = 0; ; attempt++) {
+        let retryable = true;
+        try {
+          const res = await fetch(url, { signal: controller.signal });
+          // A 4xx (signed out, bad request) won't change on a retry; only server errors and network
+          // failures are worth another attempt.
+          if (!res.ok) {
+            retryable = res.status >= 500;
+            throw new Error(`HTTP ${res.status}`);
+          }
+          const data: T = await res.json();
+          writeSessionCache(key, data);
+          setFailedKey(null);
+          return;
+        } catch {
+          if (controller.signal.aborted) return;
+          if (!retryable || attempt >= RETRY_DELAYS_MS.length) {
+            setFailedKey(key);
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+          if (controller.signal.aborted) return;
+        }
+      }
+    }
+
+    void load();
     return () => controller.abort();
   }, [key, url]);
 

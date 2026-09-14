@@ -29,7 +29,7 @@ export function TopReferringDoctorsPanel({
   return (
     <section className={`${panel} h-full`}>
       <Link href="/referrals" className={panelHeaderLink}>
-        <h2 className={panelHeaderTitle}>Top referring doctors</h2>
+        <h2 className={panelHeaderTitle}>Top Referring Doctors</h2>
         <span className={panelHeaderArrow}>→</span>
       </Link>
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6">

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Archivo } from "next/font/google";
 import { displayName } from "@/lib/display-name";
 import type { ReceptionMessage, Receptionist } from "@/lib/models";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 
 const archivo = Archivo({ subsets: ["latin"], weight: ["400", "500", "600", "800"] });
 type Practitioner = { _id: string; name: string };
@@ -21,6 +22,8 @@ export default function TodoListPage({ currentUser }: { currentUser: string | nu
   const [recipientKey, setRecipientKey] = useState("");
   const [priority, setPriority] = useState<"High" | "Routine">("Routine");
   const [notice, setNotice] = useState("");
+  // The page behind stays put while the task popup is open.
+  useScrollLock(editing !== undefined);
 
   const load = useCallback(async () => {
     try {

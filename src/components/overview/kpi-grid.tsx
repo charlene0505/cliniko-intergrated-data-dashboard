@@ -13,13 +13,20 @@ export function KpiGrid({ items, compact = false }: { items: readonly (readonly 
   if (compact) {
     return (
       <div className="flex flex-wrap gap-2.5">
-        {items.map(([value, delta, tooltip], i) => (
+        {items.map(([label, value, delta, tooltip], i) => (
           <article
             key={i}
             className="group relative flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-2xl border border-white bg-white/50 p-2 text-center"
           >
-            <span className="text-4xl leading-none font-semibold tracking-tight">{value}</span>
-            <span className={`${deltaClass(delta)} text-base leading-tight`}>{delta}</span>
+            <span className="text-xs leading-none font-semibold tracking-tight">
+              {label}
+            </span>
+            <span className="text-4xl leading-none font-semibold tracking-tight">
+              {value}
+            </span>
+            <span className={`${deltaClass(delta)} text-base leading-tight`}>
+              {delta}
+            </span>
             <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-35 -translate-x-1/2 rounded-lg bg-black/80 px-2 py-1.5 text-xs leading-snug font-medium text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100">
               {tooltip}
             </div>

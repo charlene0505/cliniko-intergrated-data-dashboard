@@ -7,6 +7,7 @@ import type { ReceptionMessage, Receptionist } from "@/lib/models";
 import { displayName } from "@/lib/display-name";
 import { Segments } from "./segments";
 import { TodayBriefingButton } from "./today-briefing-modal";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 import { panel, panelHeaderArrow, panelHeaderLink, panelHeaderTitle, tagAlert, tagFlat } from "./ui";
 
 type Practitioner = { _id: string; name: string };
@@ -46,6 +47,8 @@ export function ReceptionTodoPanel({
   const [view, setView] = useState<"My Tasks" | "Assigned to others">(
     "My Tasks",
   );
+  // The page behind stays put while the compose/edit or delete-confirm popup is open.
+  useScrollLock(composing || !!pendingDelete);
 
   // "Received" = tasks addressed to a receptionist (what we need to do). "Assigned to others" =
   // tasks addressed to a practitioner (what we've handed off, kept here only to track). A task

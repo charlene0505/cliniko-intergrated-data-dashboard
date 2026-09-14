@@ -56,8 +56,8 @@ export interface TodayBriefing {
   entries?: TodayEntry[];
   summary?: TodaySummary;
   mocked?: true;
-  // Present whenever a future shift was found within the lookahead window — a preview of the next
-  // day this receptionist is actually rostered on, regardless of whether today is also a shift.
+  // Only when this receptionist isn't rostered today but a shift was found within the lookahead
+  // window — a preview of the next day they're actually on. A day with its own briefing never has one.
   nextShift?: DayBriefing;
 }
 
@@ -260,10 +260,10 @@ async function computeDayBriefing(db: Db, businessId: string, date: string): Pro
 export async function computeTodayBriefing(db: Db, receptionistId: string, now = new Date()): Promise<TodayBriefing> {
   const date = practiceDay(now);
   const businessId = await businessFor(db, receptionistId, date);
-  const next = await nextShiftFor(db, receptionistId, date);
-  const nextShift = next ? await computeDayBriefing(db, next.businessId, next.date) : undefined;
+  // Rostered today: today's briefing is the whole answer, so the next shift isn't looked up at all.
+  if (businessId) return { status: 'ok', ...(await computeDayBriefing(db, businessId, date)) };
 
-  if (businessId) return { status: 'ok', ...(await computeDayBriefing(db, businessId, date)), nextShift };
+  const next = await nextShiftFor(db, receptionistId, date);
   if (!next) return { status: 'not_scheduled', date };
-  return { status: 'not_scheduled', date, nextShift };
+  return { status: 'not_scheduled', date, nextShift: await computeDayBriefing(db, next.businessId, next.date) };
 }

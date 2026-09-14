@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { DashboardPatient } from "@/lib/patient-dashboard";
 import { maskedDoctorName } from "@/lib/display-name";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 
 const tabs = [
   "Overview",
@@ -29,6 +30,8 @@ export default function PatientWorkspace({ showcase }: { showcase: boolean }) {
   const [selected, setSelected] = useState<DashboardPatient | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  // The page behind stays put while a patient's popup is open.
+  useScrollLock(!!selected);
   useEffect(() => {
     const controller = new AbortController();
     fetch(showcase ? "/api/showcase/patients" : "/api/patients", {

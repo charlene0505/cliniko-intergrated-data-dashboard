@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Archivo } from "next/font/google";
 import fixture from "@/lib/ui/overview-fixtures.json";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 
 const archivo = Archivo({
   subsets: ["latin"],
@@ -13,8 +14,8 @@ const archivo = Archivo({
 const kpis = [
   ["Active GPCCMP plans", "61", ""],
   ["no next appt", "14", ""],
-  ["Referrals expiring ≤30d", "4", "Sessions will be forfeited"],
-  ["Avg sessions used", "3.2", "Out of 5 allowed"],
+  ["Referrals expiring ≤30d", "4", ""],
+  ["Avg sessions used", "3.2", ""],
 ] as const;
 
 const card = "min-w-0 rounded-[20px] border border-black/10 bg-white p-6";
@@ -37,6 +38,8 @@ export default function EpcPlans({ embedded = false }: { embedded?: boolean }) {
   const [editingCreatedAt, setEditingCreatedAt] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState("");
   const [saving, setSaving] = useState(false);
+  // The page behind stays put while the contact-notes popup is open.
+  useScrollLock(!!contactModalFor);
 
   useEffect(() => {
     const query = fixture.epc.map((patient) => `email=${encodeURIComponent(patient.email)}`).join("&");
