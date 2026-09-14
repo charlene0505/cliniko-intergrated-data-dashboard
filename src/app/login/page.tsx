@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -92,8 +91,6 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-        <Link href="/showcase" className="mt-4 block rounded-lg border border-cyan-600 py-2 text-center text-sm font-medium text-cyan-700 hover:bg-cyan-50">Showcase</Link>
-        <p className="mt-2 text-center text-xs text-gray-500">Explore fictional patients, fetched from a separate MongoDB database.</p>
 
       </div>
     </div>

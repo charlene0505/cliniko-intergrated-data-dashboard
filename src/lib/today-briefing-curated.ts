@@ -28,79 +28,125 @@ import type { JudgedSummary } from './today-briefing';
 // whom (David Hood, Maria Sardon) have a genuinely outstanding online Patient Consent Form. No
 // separate "health form" shows up in the real data, so it isn't invented here.
 export const CURATED_SUMMARIES: Record<string, JudgedSummary> = {
-  '2026-09-15_73038': {
+  "2026-09-15_73038": {
     patientNotes: [
       {
-        patientName: 'Danielle Reddy',
-        practitionerName: 'Jin Park / Joshua Lui',
-        time: '9:00 AM',
+        patientName: "Danielle P",
+        practitionerName: "Jin P / Joshua L",
+        time: "9:00 AM",
         points: [
-          { text: 'Dentist requested dry needling focus: temporalis + masseter, for her migraines.', risk: false },
-          { text: 'Awaiting a repeat MRI — possible trigeminal neuralgia.', risk: false },
-          { text: 'Booked with both Jin Park and Joshua Lui today.', risk: false },
-          { text: 'WorkCover file notes a history of suicidal thoughts and panic disorder — check in sensitively, not just for the physical complaint.', risk: true },
+          {
+            text: "Dentist requested dry needling focus: temporalis + masseter, for her migraines.",
+            risk: false,
+          },
+          {
+            text: "Awaiting a repeat MRI — possible trigeminal neuralgia.",
+            risk: false,
+          },
+          {
+            text: "Booked with both Jin Park and Joshua Lui today.",
+            risk: false,
+          },
+          {
+            text: "WorkCover file notes a history of suicidal thoughts and panic disorder — check in sensitively, not just for the physical complaint.",
+            risk: true,
+          },
         ],
       },
       {
-        patientName: 'Hyeyeon Kim',
-        practitionerName: 'Jin Park',
-        time: '9:30 AM',
+        patientName: "Hyeyeon P",
+        practitionerName: "Jin P",
+        time: "9:30 AM",
         points: [
-          { text: 'Remind her to bring her Certificate of Capacity (COC).', risk: false },
-          { text: 'Speaks Korean / basic English — allow extra time.', risk: false },
+          {
+            text: "Remind her to bring her Certificate of Capacity (COC).",
+            risk: false,
+          },
+          {
+            text: "Speaks Korean / basic English — allow extra time.",
+            risk: false,
+          },
         ],
       },
       {
-        patientName: 'Michael Pritchard',
-        practitionerName: 'Joshua Lui',
-        time: '12:00 PM',
-        points: [{ text: "CC today's progress report to imogen.j@eml.com.au (WorkCover requirement).", risk: false }],
-      },
-      {
-        patientName: 'Nicola Kim',
-        practitionerName: 'Jin Park',
-        time: '12:30 PM',
-        points: [{ text: 'Health fund form still needs completing (ongoing knee issue).', risk: false }],
-      },
-      {
-        patientName: 'Yinrui Deng',
-        practitionerName: 'Matthew Matsuura',
-        time: '2:00 PM',
+        patientName: "Michael P",
+        practitionerName: "Joshua L",
+        time: "12:00 PM",
         points: [
-          { text: 'NDIS billing: swap practitioner code, invoice, then move the appointment back to Matthew.', risk: false },
-          { text: 'Away from 15 Jan for about a month — speaks Mandarin.', risk: false },
+          {
+            text: "CC today's progress report to imogen.j@eml.com.au (WorkCover requirement).",
+            risk: false,
+          },
         ],
       },
       {
-        patientName: 'Zhi Yuan Zhang',
-        practitionerName: 'Matthew Matsuura',
-        time: '4:00 PM',
+        patientName: "Nicola P",
+        practitionerName: "Jin P",
+        time: "12:30 PM",
         points: [
-          { text: 'Wants future appointments capped at 30 minutes.', risk: false },
-          { text: 'Aged Care invoices now go to 2 recipients — old homecare@ address retired.', risk: false },
+          {
+            text: "Health fund form still needs completing (ongoing knee issue).",
+            risk: false,
+          },
         ],
       },
       {
-        patientName: 'Louisa Ho',
-        practitionerName: 'Matthew Matsuura',
-        time: '4:30 PM',
+        patientName: "Yinrui P",
+        practitionerName: "Matthew M",
+        time: "2:00 PM",
         points: [
-          { text: 'Only available Wed/Fri (insurer-approved).', risk: false },
-          { text: 'Pre-approval required before billing progress/case-conference notes.', risk: false },
+          {
+            text: "NDIS billing: swap practitioner code, invoice, then move the appointment back to Matthew.",
+            risk: false,
+          },
+          {
+            text: "Away from 15 Jan for about a month — speaks Mandarin.",
+            risk: false,
+          },
         ],
       },
       {
-        patientName: 'Rhiannan Lopez',
-        practitionerName: 'Joshua Lui',
-        time: '4:00 PM',
+        patientName: "Zhi Yuan P",
+        practitionerName: "Matthew M",
+        time: "4:00 PM",
         points: [
-          { text: 'No-showed last visit, uncontactable by phone.', risk: true },
-          { text: 'EPC referral capped at 4 sessions — today is only #2.', risk: true },
+          {
+            text: "Wants future appointments capped at 30 minutes.",
+            risk: false,
+          },
+          {
+            text: "Aged Care invoices now go to 2 recipients — old homecare@ address retired.",
+            risk: false,
+          },
+        ],
+      },
+      {
+        patientName: "Louisa P",
+        practitionerName: "Matthew M",
+        time: "4:30 PM",
+        points: [
+          { text: "Only available Wed/Fri (insurer-approved).", risk: false },
+          {
+            text: "Pre-approval required before billing progress/case-conference notes.",
+            risk: false,
+          },
+        ],
+      },
+      {
+        patientName: "Rhiannan P",
+        practitionerName: "Joshua L",
+        time: "4:00 PM",
+        points: [
+          { text: "No-showed last visit, uncontactable by phone.", risk: true },
+          {
+            text: "EPC referral capped at 4 sessions — today is only #2.",
+            risk: true,
+          },
         ],
       },
     ],
     trends: [
-      "6 new patients today, David Hood and Maria Sardon still haven't completed their online Consent Form; have them fill it in when they arrive.",
+      "6 new patients today, David and Maria still haven't completed their online Consent Form; have them fill it in when they arrive.",
     ],
   },
 };

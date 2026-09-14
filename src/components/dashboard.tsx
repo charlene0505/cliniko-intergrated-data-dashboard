@@ -4,6 +4,7 @@ import Link from "next/link";
 import PatientWorkspace from "@/components/patient-workspace";
 import { useEffect, useState, useCallback } from "react";
 import type { StatPeriod, ReferralStat, ContactFailure } from "@/lib/models";
+import { maskedDoctorName } from "@/lib/display-name";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -327,7 +328,7 @@ export default function Dashboard({ showcase = false }: { showcase?: boolean }) 
                     >
                       <td className="px-3 py-1 text-gray-500">{index + 1}</td>
                       <td className="px-3 py-1 text-gray-800 font-bold">
-                        {doctor.displayName}
+                        {maskedDoctorName(doctor.displayName)}
                       </td>
                       <td className="px-5 py-1 text-center font-bold text-black">
                         {doctor.count.toLocaleString()}

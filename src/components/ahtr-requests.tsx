@@ -31,7 +31,7 @@ function tagFor(kind: string) {
   return kind === "alert" ? tagAlert : kind === "due" ? tagDue : tagFlat;
 }
 
-export default function AhtrRequests() {
+export default function AhtrRequests({ embedded = false }: { embedded?: boolean }) {
   const [notice, setNotice] = useState("");
   const preview = (label: string) =>
     setNotice(`${label} · This action isn't connected yet.`);
@@ -59,8 +59,8 @@ export default function AhtrRequests() {
   });
 
   return (
-    <main className={`min-h-screen  text-[#1a1a1a] ${archivo.className}`}>
-      <header className="border-b border-black/10 bg-white">
+    <div className={`${embedded ? "" : "min-h-screen"} text-[#1a1a1a] ${archivo.className}`}>
+      {!embedded && <header className="border-b border-black/10 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-black/10 px-7 py-3.5">
           <span className="flex items-center gap-1.5 text-xs text-black/60">
             <span className="block h-1.5 w-1.5 rounded-full bg-[#14a3a8]" />
@@ -88,7 +88,7 @@ export default function AhtrRequests() {
             WorkCover and CTP treatment requests
           </h1>
         </div>
-      </header>
+      </header>}
       <div className="flex flex-col gap-5 px-7 pb-10 pt-6">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 ">
           {kpis.map(([kLabel, value]) => (
@@ -204,6 +204,6 @@ export default function AhtrRequests() {
           </button>
         </div>
       )}
-    </main>
+    </div>
   );
 }

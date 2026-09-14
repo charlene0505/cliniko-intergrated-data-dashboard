@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Archivo } from "next/font/google";
 import fixture from "@/lib/ui/overview-fixtures.json";
 
@@ -23,37 +23,81 @@ const link =
 
 interface ContactEntry {
   note: string;
-  feedback: string;
+  createdAt: string;
+  type: "careplan" | "payment" | "clinical";
 }
 
-export default function EpcPlans() {
+export default function EpcPlans({ embedded = false }: { embedded?: boolean }) {
   const [notice, setNotice] = useState("");
   const preview = (label: string) =>
     setNotice(`${label} · This action isn't connected yet.`);
 
-  const [contactNotes, setContactNotes] = useState<Record<string, ContactEntry>>({});
-  const [contactModalFor, setContactModalFor] = useState<string | null>(null);
+  const [contactNotes, setContactNotes] = useState<Record<string, ContactEntry[]>>({});
+  const [contactModalFor, setContactModalFor] = useState<{ name: string; email: string } | null>(null);
+  const [editingCreatedAt, setEditingCreatedAt] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState("");
-  const [draftFeedback, setDraftFeedback] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  function openContactModal(name: string) {
-    const existing = contactNotes[name];
-    setDraftNote(existing?.note ?? "");
-    setDraftFeedback(existing?.feedback ?? "");
-    setContactModalFor(name);
+  useEffect(() => {
+    const query = fixture.epc.map((patient) => `email=${encodeURIComponent(patient.email)}`).join("&");
+    fetch(`/api/patients/contact-history?${query}&type=careplan`)
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        return data;
+      })
+      .then((data) => setContactNotes(data.histories))
+      .catch(() => setNotice("Unable to load contact history."));
+  }, []);
+
+  function openContactModal(patient: { name: string; email: string }, entry?: ContactEntry) {
+    setDraftNote(entry?.note ?? "");
+    setEditingCreatedAt(entry?.createdAt ?? null);
+    setContactModalFor(patient);
   }
 
   function closeContactModal() {
     setContactModalFor(null);
   }
 
-  function saveContactNotes() {
+  async function saveContactNotes() {
     if (!contactModalFor) return;
-    setContactNotes((prev) => ({
-      ...prev,
-      [contactModalFor]: { note: draftNote.trim(), feedback: draftFeedback.trim() },
+    const note = draftNote.trim();
+    if (!note) return;
+    setSaving(true);
+    const method = editingCreatedAt ? "PATCH" : "POST";
+    const response = await fetch("/api/patients/contact-history", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: contactModalFor.email, note, type: "careplan", createdAt: editingCreatedAt }),
+    });
+    const data = await response.json();
+    setSaving(false);
+    if (!response.ok) return setNotice(data.error ?? "Unable to save contact history.");
+    setContactNotes((previous) => {
+      const entries = previous[contactModalFor.email] ?? [];
+      return {
+        ...previous,
+        [contactModalFor.email]: editingCreatedAt
+          ? entries.map((entry) => entry.createdAt === editingCreatedAt ? data.entry : entry)
+          : [...entries, data.entry],
+      };
+    });
+    closeContactModal();
+  }
+
+  async function deleteContactNote(email: string, createdAt: string) {
+    const response = await fetch("/api/patients/contact-history", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, createdAt }),
+    });
+    const data = await response.json();
+    if (!response.ok) return setNotice(data.error ?? "Unable to delete contact history.");
+    setContactNotes((previous) => ({
+      ...previous,
+      [email]: (previous[email] ?? []).filter((entry) => entry.createdAt !== createdAt),
     }));
-    setContactModalFor(null);
   }
   async function logout() {
     const response = await fetch("/api/auth/logout", { method: "POST" });
@@ -62,8 +106,8 @@ export default function EpcPlans() {
   }
 
   return (
-    <main className={`min-h-screen text-[#1a1a1a] ${archivo.className}`}>
-      <header className="border-b border-black/10 bg-white">
+    <div className={`${embedded ? "" : "min-h-screen"} text-[#1a1a1a] ${archivo.className}`}>
+      {!embedded && <header className="border-b border-black/10 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-black/10 px-7 py-3.5">
           <span className="flex items-center gap-1.5 text-xs text-black/60">
             <span className="block h-1.5 w-1.5 rounded-full bg-[#14a3a8]" />
@@ -88,7 +132,7 @@ export default function EpcPlans() {
             GPCCMP Patients Management
           </h1>
         </div>
-      </header>
+      </header>}
       <div className="flex flex-col gap-5 px-7 pb-10 pt-6">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {kpis.map(([kLabel, value, note]) => (
@@ -176,18 +220,20 @@ export default function EpcPlans() {
                       {e.note}
                     </td> */}
                     <td className="max-w-[200px] border-b border-black/10 px-2.5 py-3">
-                      {contactNotes[e.name] ? (
+                      {(contactNotes[e.email]?.length ?? 0) > 0 ? (
                         <div className="flex flex-col gap-1">
                           <p className="truncate text-xs text-black/70">
-                            {contactNotes[e.name].note || contactNotes[e.name].feedback}
+                            {contactNotes[e.email].at(-1)?.note}
                           </p>
-                          <button onClick={() => openContactModal(e.name)} className={`${link} text-xs`}>
-                            Edit
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => openContactModal(e, contactNotes[e.email].at(-1))} className={`${link} text-xs`}>Edit</button>
+                            <button onClick={() => deleteContactNote(e.email, contactNotes[e.email].at(-1)!.createdAt)} className="text-xs font-semibold text-clay hover:text-black">Delete</button>
+                            <button onClick={() => openContactModal(e)} className={`${link} text-xs`}>+ Add</button>
+                          </div>
                         </div>
                       ) : (
                         <button
-                          onClick={() => openContactModal(e.name)}
+                          onClick={() => openContactModal(e)}
                           className="rounded-full border border-[#14a3a8] bg-[#14a3a8] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#0e8a8f]"
                         >
                           + Add note
@@ -227,7 +273,7 @@ export default function EpcPlans() {
           >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold tracking-tight">
-                Contact notes · {contactModalFor}
+                {editingCreatedAt ? "Edit" : "Add"} contact note · {contactModalFor.name}
               </h3>
               <button
                 type="button"
@@ -239,22 +285,11 @@ export default function EpcPlans() {
               </button>
             </div>
             <label className="flex flex-col gap-1.5 text-xs font-semibold text-black/60">
-              Contact notes
               <textarea
                 rows={3}
                 value={draftNote}
                 onChange={(e) => setDraftNote(e.target.value)}
                 placeholder="What was discussed when you contacted this patient…"
-                className="rounded-xl border border-black/10 p-2.5 text-sm font-normal text-black focus:outline focus:outline-teal-600"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 text-xs font-semibold text-black/60">
-              Feedback
-              <textarea
-                rows={3}
-                value={draftFeedback}
-                onChange={(e) => setDraftFeedback(e.target.value)}
-                placeholder="Any feedback from the patient…"
                 className="rounded-xl border border-black/10 p-2.5 text-sm font-normal text-black focus:outline focus:outline-teal-600"
               />
             </label>
@@ -269,14 +304,15 @@ export default function EpcPlans() {
               <button
                 type="button"
                 onClick={saveContactNotes}
-                className="rounded-full border border-[#14a3a8] bg-[#14a3a8] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#0e8a8f]"
+                disabled={saving || !draftNote.trim()}
+                className="rounded-full border border-[#14a3a8] bg-[#14a3a8] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#0e8a8f] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Save
+                {saving ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -51,6 +51,65 @@ export interface AppointmentVolumeStats {
   deltaPercent: number | null;
 }
 
+// ── Stored results ──────────────────────────────────────────────────────────
+//
+// Both attendance panels (No-shows, New vs Returning) are derived from a full scan of appointments
+// and attendees. Running that per request left the panels on "Loading real attendance data…" for
+// the length of the scan on every refresh, so — as with referral stats and patient mix — each range
+// is computed once during sync and read back from `attendance_stats`.
+
+type Clinical = Awaited<ReturnType<typeof loadClinical>>;
+
+export interface AttendanceStat {
+  _id: PatientMixRange;
+  computedAt: Date;
+  // Range-independent, but stored on every range's document so a read is a single findOne.
+  noShows: NoShowStats;
+  patientMix: PatientMixStats;
+}
+
+const ATTENDANCE_RANGES: PatientMixRange[] = ["Last 7 Days", "Last 30 Days", "Year to Date", "Last Year"];
+
+export async function computeAttendance(
+  db: Db,
+  range: PatientMixRange,
+  clinical?: Clinical,
+): Promise<{ noShows: NoShowStats; patientMix: PatientMixStats } | null> {
+  const data = clinical ?? (await loadClinical(db));
+  const now = new Date();
+  const [noShows, patientMix] = await Promise.all([
+    computeNoShowStats(db, now, data),
+    computePatientMixStats(db, range, now, data),
+  ]);
+  return noShows && patientMix ? { noShows, patientMix } : null;
+}
+
+export async function readStoredAttendance(db: Db, range: PatientMixRange): Promise<AttendanceStat | null> {
+  return db.collection<AttendanceStat>("attendance_stats").findOne({ _id: range });
+}
+
+export async function storeAttendance(
+  db: Db,
+  range: PatientMixRange,
+  value: { noShows: NoShowStats; patientMix: PatientMixStats },
+): Promise<void> {
+  await db.collection<AttendanceStat>("attendance_stats").replaceOne(
+    { _id: range },
+    { computedAt: new Date(), noShows: value.noShows, patientMix: value.patientMix },
+    { upsert: true },
+  );
+}
+
+// Called at the end of a sync. Loads the clinical data once and reuses it for every range, rather
+// than re-scanning both collections for each of the four ranges.
+export async function computeAndStoreAttendance(db: Db): Promise<void> {
+  const clinical = await loadClinical(db);
+  for (const range of ATTENDANCE_RANGES) {
+    const value = await computeAttendance(db, range, clinical);
+    if (value) await storeAttendance(db, range, value);
+  }
+}
+
 function buildMixBuckets(range: PatientMixRange, now: Date) {
   if (range === "Last 7 Days") {
     // 7 daily buckets — include the date, not just the weekday name, so consecutive weeks
@@ -120,8 +179,18 @@ function buildMixBuckets(range: PatientMixRange, now: Date) {
 
 async function loadClinical(db: Db) {
   const [appointments, attendees] = await Promise.all([
-    db.collection<StoredAppointment>("appointments").find({}).toArray(),
-    db.collection<StoredAttendee>("attendees").find({}).toArray(),
+    // Projected to just the fields the stats read. Pulling whole documents (notes, practitioner and
+    // type ids, extra timestamps) made every scan transfer far more than it uses.
+    db
+      .collection<StoredAppointment>("appointments")
+      .find({})
+      .project<StoredAppointment>({ startsAt: 1, cancelledAt: 1, archivedAt: 1, deletedAt: 1, didNotArrive: 1 })
+      .toArray(),
+    db
+      .collection<StoredAttendee>("attendees")
+      .find({})
+      .project<StoredAttendee>({ patientId: 1, appointmentId: 1, cancelledAt: 1, archivedAt: 1, deletedAt: 1 })
+      .toArray(),
   ]);
   return { appointments, attendees };
 }
@@ -138,8 +207,9 @@ function isLateCancellation(cancelledAt: Date | null, startsAt: Date): boolean {
 export async function computeNoShowStats(
   db: Db,
   now = new Date(),
+  clinical?: Clinical,
 ): Promise<NoShowStats | null> {
-  const { appointments, attendees } = await loadClinical(db);
+  const { appointments, attendees } = clinical ?? (await loadClinical(db));
   if (!appointments.length) return null;
   const byAppt = new Map(appointments.map((a) => [a._id, a]));
 
@@ -210,8 +280,9 @@ export async function computePatientMixStats(
   db: Db,
   range: PatientMixRange = "Last 30 Days",
   now = new Date(),
+  clinical?: Clinical,
 ): Promise<PatientMixStats | null> {
-  const { appointments, attendees } = await loadClinical(db);
+  const { appointments, attendees } = clinical ?? (await loadClinical(db));
   if (!appointments.length) return null;
   const byAppt = new Map(appointments.map((a) => [a._id, a]));
 
@@ -271,26 +342,42 @@ function isLiveAppointment(a: StoredAppointment): boolean {
   return !a.cancelledAt && !a.archivedAt && !a.deletedAt;
 }
 
+// Cliniko's times are stored as second-precision UTC strings ("2026-09-14T23:00:00Z"). Bounds are
+// formatted identically so a string comparison on the indexed startsAt field matches the instant
+// comparison, letting a window query read only its own appointments instead of all of them.
+function clinikoIso(d: Date): string {
+  return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+// `businessId` narrows the window to one practice; null counts every practice.
+async function findAppointmentsBetween(
+  db: Db,
+  start: Date,
+  end: Date,
+  businessId: string | null,
+): Promise<StoredAppointment[] | null> {
+  const appointments = db.collection<StoredAppointment>("appointments");
+  // Distinguish "nothing synced yet" (null, so the caller falls back to placeholder data) from
+  // "synced, but genuinely zero appointments in the window" (e.g. a Sunday closure, or a practice
+  // that's closed today).
+  if (!(await appointments.findOne({}, { projection: { _id: 1 } }))) return null;
+  return appointments
+    .find({ startsAt: { $gte: clinikoIso(start), $lt: clinikoIso(end) }, ...(businessId ? { businessId } : {}) })
+    .project<StoredAppointment>({ startsAt: 1, cancelledAt: 1, archivedAt: 1, deletedAt: 1, didNotArrive: 1 })
+    .toArray();
+}
+
 export async function computeTodayApptStats(
   db: Db,
   now = new Date(),
+  businessId: string | null = null,
 ): Promise<TodayApptStats | null> {
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const endOfDay = new Date(startOfDay.getTime() + 24 * 3600 * 1000);
-  const appointments = await db
-    .collection<StoredAppointment>("appointments")
-    .find({})
-    .toArray();
-  // Distinguish "nothing synced yet" (null, so the caller falls back to placeholder data) from
-  // "synced, but genuinely zero appointments today" (a real {0, 0} — e.g. a Sunday closure).
-  if (!appointments.length) return null;
+  const appointments = await findAppointmentsBetween(db, startOfDay, endOfDay, businessId);
+  if (!appointments) return null;
 
-  const today = appointments.filter((a) => {
-    if (!isLiveAppointment(a)) return false;
-    const startsAt = new Date(a.startsAt);
-    return startsAt >= startOfDay && startsAt < endOfDay;
-  });
-
+  const today = appointments.filter(isLiveAppointment);
   const completed = today.filter((a) => new Date(a.startsAt) <= now).length;
   return { completed, remaining: today.length - completed };
 }
@@ -300,15 +387,13 @@ export async function computeTodayApptStats(
 export async function computeAppointmentVolumeStats(
   db: Db,
   now = new Date(),
+  businessId: string | null = null,
 ): Promise<AppointmentVolumeStats | null> {
   const weekMs = 7 * 24 * 3600 * 1000;
   const thisWeekStart = new Date(now.getTime() - weekMs);
   const lastWeekStart = new Date(now.getTime() - 2 * weekMs);
-  const appointments = await db
-    .collection<StoredAppointment>("appointments")
-    .find({})
-    .toArray();
-  if (!appointments.length) return null;
+  const appointments = await findAppointmentsBetween(db, lastWeekStart, now, businessId);
+  if (!appointments) return null;
 
   let thisWeek = 0,
     lastWeek = 0;

@@ -23,7 +23,29 @@ if (process.env.NODE_ENV === 'development') {
   client = new MongoClient(uri);
 }
 
+// Indexes the dashboard's date-range queries rely on. createIndex is a no-op for an index that already
+// exists, so this only costs a round trip per collection once per server process. A failure is logged
+// rather than thrown: every query still returns the right answer without them, just more slowly.
+async function ensureIndexes(db: Db) {
+  await Promise.all([
+    db.collection('daily_stats').createIndex({ metric: 1, date: 1 }),
+    db.collection('visits').createIndex({ date: 1 }),
+    db.collection('visits').createIndex({ patientId: 1 }),
+    db.collection('appointments').createIndex({ startsAt: 1 }),
+    // The briefing looks up a single day's attendees by appointment; without this, that's a full scan.
+    db.collection('attendees').createIndex({ appointmentId: 1 }),
+    db.collection('patients').createIndex({ clinikoCreatedAt: 1 }),
+  ]);
+}
+
+let indexesReady: Promise<void> | null = null;
+
 export async function getDb(): Promise<Db> {
   await client.connect();
-  return client.db();
+  const db = client.db();
+  indexesReady ??= ensureIndexes(db).catch((error) => {
+    console.error('Failed to ensure MongoDB indexes', error);
+  });
+  await indexesReady;
+  return db;
 }

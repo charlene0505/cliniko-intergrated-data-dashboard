@@ -7,42 +7,20 @@ import { panel, tagAlert, tagNew, tagYellow } from "./ui";
 type Highlight = (typeof fixture.highlights)[number];
 
 const FILTERS = ["All", "High cancellation risk", "AHTR not updated", "New patient"];
-const PRACTICES = ["Hurstville", "CBD", "All practices"];
 
-function PracticeLinks({ practice, onPracticeChange }: { practice: string; onPracticeChange: (v: string) => void }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      {PRACTICES.map((p, i) => (
-        <span key={p} className="flex items-center gap-2">
-          {i > 0 && <span className="text-black">•</span>}
-          <button
-            type="button"
-            onClick={() => onPracticeChange(p)}
-            className={`cursor-pointer border-0 bg-transparent p-0 font-medium transition-colors hover:text-black ${
-              p === practice ? "text-black underline underline-offset-2" : "text-black/60"
-            }`}
-          >
-            {p}
-          </button>
-        </span>
-      ))}
-    </div>
-  );
-}
-
+// The practice itself is switched from the header, under the greeting; this panel just shows which
+// one it's filtered to.
 export function HighlightedPatientsPanel({
   visible,
   filter,
   onFilterChange,
   practice,
-  onPracticeChange,
   onPreview,
 }: {
   visible: Highlight[];
   filter: string;
   onFilterChange: (v: string) => void;
   practice: string;
-  onPracticeChange: (v: string) => void;
   onPreview: (label: string) => void;
 }) {
   return (
@@ -50,7 +28,7 @@ export function HighlightedPatientsPanel({
       <div className="flex flex-col gap-3 px-6 py-4">
         <div className="flex items-center justify-between gap-3 py-2">
           <h2 className="text-base font-semibold tracking-tight">Highlighted Patients from Today</h2>
-          <PracticeLinks practice={practice} onPracticeChange={onPracticeChange} />
+          <span className="text-xs font-medium text-black/60">{practice}</span>
         </div>
         <div className="self-start">
           <Segments options={FILTERS} value={filter} onChange={onFilterChange} />

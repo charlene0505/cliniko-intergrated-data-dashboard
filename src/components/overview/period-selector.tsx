@@ -2,30 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CustomRangeForm } from "./custom-range-form";
+import { PERIOD_OPTIONS, resolvePeriod, type Period } from "@/lib/date-range";
 
-export const PERIOD_OPTIONS = ["Last 7 Days", "Last 30 Days", "Year to Date", "Last Year"] as const;
-
-function daysBefore(now: Date, n: number): Date {
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - n);
-}
-
-// Mirrors the bucket windows computed server-side (see buildMixBuckets in attendance-stats.ts /
-// the referral_stats period cutoffs) so the displayed range always matches what the data covers.
-function resolveRange(value: string, now: Date): { start: Date; end: Date } {
-  switch (value) {
-    case "Last 7 Days":
-      return { start: daysBefore(now, 6), end: now };
-    case "Year to Date":
-      return { start: new Date(now.getFullYear(), 0, 1), end: now };
-    case "Last Year":
-      return { start: daysBefore(now, 364), end: now };
-    default: // "Last 30 Days"
-      return { start: daysBefore(now, 29), end: now };
-  }
-}
-
-function formatDate(d: Date): string {
-  return d.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" });
+// "YYYY-MM-DD" → "DD/MM/YYYY", split rather than parsed so the day can't shift with the browser's
+// timezone.
+function formatDay(day: string): string {
+  const [year, month, date] = day.split("-");
+  return `${date}/${month}/${year}`;
 }
 
 function CalendarIcon() {
@@ -41,7 +24,7 @@ function CalendarIcon() {
 // Shared by every panel that offers a time-range filter (Patient mix, Top referring doctors, New
 // vs Returning patients): a preset dropdown, plus a date-range display next to it that doubles as
 // the trigger for a custom From/To form — mirroring a preset-dropdown + range-picker pattern.
-export function PeriodSelector({ value, onChange, onApplyCustomRange }: { value: string; onChange: (v: string) => void; onApplyCustomRange: () => void }) {
+export function PeriodSelector({ value, onChange }: { value: Period; onChange: (v: Period) => void }) {
   const [open, setOpen] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -57,7 +40,8 @@ export function PeriodSelector({ value, onChange, onApplyCustomRange }: { value:
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const { start, end } = resolveRange(value, new Date());
+  // Resolved by the same helper the API routes use, so the dates shown are exactly the days queried.
+  const range = resolvePeriod(value);
 
   return (
     <div ref={rootRef} className="flex flex-wrap items-center gap-2">
@@ -71,7 +55,7 @@ export function PeriodSelector({ value, onChange, onApplyCustomRange }: { value:
           }}
           className="flex items-center gap-1.5 rounded-2xl border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink"
         >
-          {value}
+          {typeof value === "string" ? value : "Custom range"}
           <span className={`text-[9px] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true">▾</span>
         </button>
         {open && (
@@ -108,13 +92,14 @@ export function PeriodSelector({ value, onChange, onApplyCustomRange }: { value:
           className="flex items-center gap-1.5 rounded-2xl border border-black/10 bg-white px-3 py-1.5 text-xs font-medium whitespace-nowrap text-black/70"
         >
           <CalendarIcon />
-          {formatDate(start)} - {formatDate(end)}
+          {formatDay(range.from)} - {formatDay(range.to)}
         </button>
         {showCustom && (
           <div className="absolute right-0 top-full z-20 mt-1 rounded-2xl border border-black/10 bg-white p-3 shadow-lg">
             <CustomRangeForm
-              onApply={() => {
-                onApplyCustomRange();
+              initial={range}
+              onApply={(custom) => {
+                onChange(custom);
                 setShowCustom(false);
               }}
             />

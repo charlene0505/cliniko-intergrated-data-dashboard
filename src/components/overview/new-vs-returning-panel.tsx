@@ -1,25 +1,29 @@
 "use client";
 
 import type { PatientMixStats } from "@/lib/attendance-stats";
+import type { Period } from "@/lib/date-range";
 import { PeriodSelector } from "./period-selector";
+import { useEnterAnimation } from "@/lib/use-enter-animation";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import { cardNoBg } from "./ui";
 
 export function NewVsReturningPanel({
   trendRange,
   onRangeChange,
-  onApplyCustomRange,
   stats,
 }: {
-  trendRange: string;
-  onRangeChange: (v: string) => void;
-  onApplyCustomRange: () => void;
+  trendRange: Period;
+  onRangeChange: (v: Period) => void;
   stats: PatientMixStats | null;
 }) {
   const monthly = stats?.monthly ?? [];
   // Attached to the bar row below, which only mounts once `stats` has arrived — the observer picks
   // it up whenever that happens, so the columns always paint hidden first and then animate in.
-  const [barsRef, entered] = useScrollReveal<HTMLDivElement>();
+  const [barsRef, revealed] = useScrollReveal<HTMLDivElement>();
+  // The scroll reveal only fires once, so a range switch replays the grow-in through this instead.
+  // Transitions are only applied while entered: the reset to zero snaps, and just the grow-in animates.
+  const replayed = useEnterAnimation(stats);
+  const entered = revealed && replayed;
 
   return (
     <section className={`${cardNoBg} flex flex-col gap-3`}>
@@ -29,7 +33,6 @@ export function NewVsReturningPanel({
       <PeriodSelector
         value={trendRange}
         onChange={onRangeChange}
-        onApplyCustomRange={onApplyCustomRange}
       />
       {stats ? (
         <div
@@ -46,24 +49,19 @@ export function NewVsReturningPanel({
             // rather than all popping in at once with only the fill growing.
             <div
               key={m.label}
-              className={`flex flex-1 flex-col items-center gap-1 transition-all duration-500 ease-out ${
-                entered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
+              className={`flex flex-1 flex-col items-center gap-1 ${
+                entered ? "translate-y-0 opacity-100 transition-all duration-500 ease-out" : "translate-y-3 opacity-0"
               }`}
               style={{ transitionDelay: `${i * 100}ms` }}
             >
-              {/* Fill height is the literal new/total percentage (0-100% of the track) — not
-                  normalized against the tallest bar in view, so a 19% bar always reads as ~1/5
-                  full regardless of what the neighbouring bars show. */}
+              {/* Fill height and label both show new patients as a share of all patients in the period. */}
               <div className="relative flex h-14 w-full flex-col justify-end overflow-visible rounded-t-md  bg-alert/50 ">
                 <div
                   style={{ height: entered ? `${m.percent}%` : "0%", transitionDelay: `${i * 100}ms` }}
-                  className="w-full bg-teal-300 transition-[height] duration-700 ease-out"
+                  className={`w-full bg-teal-300 ${entered ? "transition-[height] duration-700 ease-out" : ""}`}
                 />
-                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 whitespace-nowrap text-center text-md font-bold tabular-nums text-ink">
-                  {m.newCount}
-                  {/* <span className="font-medium text-black/50">
-                    /{m.totalCount}
-                  </span> */}
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 whitespace-nowrap text-center text-[10px] font-normal tabular-nums text-ink">
+                  {m.percent}%
                 </span>
               </div>
               <span className="whitespace-nowrap text-center text-xs uppercase tracking-widest text-black/50">

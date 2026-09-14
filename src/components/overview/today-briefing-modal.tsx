@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useEnterAnimation } from "@/lib/use-enter-animation";
+import { useDataBlur } from "@/lib/data-blur";
+import { practiceDay } from "@/lib/date-range";
+import { CURATED_SUMMARIES } from "@/lib/today-briefing-curated";
 
 interface NotePoint {
   text: string;
@@ -44,6 +47,26 @@ interface TodayBriefingResponse {
   nextShift?: DayBriefing;
 }
 
+// The curated entry is the CBD shift (business 73038); it carries no business name of its own.
+const PREFILLED_BUSINESS = "Sydney Health Physiotherapy - Sydney CBD";
+
+// The pre-filled briefing from today-briefing-curated.ts, re-dated so it reads as today's shift and as
+// tomorrow's for the next-shift preview. Curated summaries don't include reception notes.
+function blurredBriefing(): TodayBriefingResponse {
+  const [curated] = Object.values(CURATED_SUMMARIES);
+  const summary: TodaySummary = { ...curated, receptionNotes: [] };
+  const today = practiceDay(new Date());
+  const tomorrow = practiceDay(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  return {
+    status: "ok",
+    date: today,
+    businessName: PREFILLED_BUSINESS,
+    summary,
+    mocked: true,
+    nextShift: { date: tomorrow, businessName: PREFILLED_BUSINESS, summary, mocked: true },
+  };
+}
+
 function AddToTodoButton({
   patientName,
   pointText,
@@ -54,6 +77,8 @@ function AddToTodoButton({
   alreadyAdded: boolean;
 }) {
   const [status, setStatus] = useState<"idle" | "adding" | "added">(alreadyAdded ? "added" : "idle");
+  // Pre-filled content isn't today's actual data, so it mustn't be added to the real to-do list.
+  const [blurred] = useDataBlur();
 
   async function handleAdd() {
     if (status !== "idle") return;
@@ -73,6 +98,8 @@ function AddToTodoButton({
       setStatus("idle");
     }
   }
+
+  if (blurred) return null;
 
   return (
     <span className="group/add relative inline-flex flex-none">
@@ -289,17 +316,34 @@ export function TodayBriefingButton({ onClose, existingTaskTexts }: { onClose?: 
   const [data, setData] = useState<TodayBriefingResponse | null>(null);
   const [view, setView] = useState<"current" | "next">("current");
   const [buffering, setBuffering] = useState(false);
+  const [blurred] = useDataBlur();
+  // Bumped on every open, so a response from an earlier open — e.g. a slow real briefing that lands
+  // after data blur was switched on — can't overwrite what's on screen now.
+  const requestId = useRef(0);
 
   function openModal() {
+    const id = ++requestId.current;
     setOpen(true);
-    setLoading(true);
     setView("current");
     setBuffering(false);
+    // With data blur on, the server is never queried: the pre-filled curated briefing is shown instead.
+    if (blurred) {
+      setData(blurredBriefing());
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     fetch("/api/reception/today-briefing")
       .then((res) => res.json())
-      .then((d: TodayBriefingResponse) => setData(d))
-      .catch(() => setData({ status: "error" }))
-      .finally(() => setLoading(false));
+      .then((d: TodayBriefingResponse) => {
+        if (id === requestId.current) setData(d);
+      })
+      .catch(() => {
+        if (id === requestId.current) setData({ status: "error" });
+      })
+      .finally(() => {
+        if (id === requestId.current) setLoading(false);
+      });
   }
 
   // Any "+" clicked inside creates a task straight in the database — the parent's to-do list
@@ -345,12 +389,20 @@ export function TodayBriefingButton({ onClose, existingTaskTexts }: { onClose?: 
           onClick={closeModal}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-2xl flex-col gap-5 overflow-y-auto rounded-2xl bg-white p-8"
+            // Portalled to document.body, so it sits outside the <main> that sets the page's text
+            // colour — without an explicit colour it inherits body's, which is near-white under a
+            // dark colour scheme and disappears against the card.
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col gap-5 overflow-y-auto rounded-2xl bg-white p-8 text-ink"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold tracking-tight">
+              <h3 className="flex items-center gap-2 text-base font-semibold tracking-tight">
                 Today&apos;s briefing
+                {blurred && (
+                  <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-black/55">
+                    Pre-filled
+                  </span>
+                )}
               </h3>
               <button
                 type="button"

@@ -3,11 +3,27 @@
 // it's actually shown: the dashboard greeting, and each task/message's "From ..." attribution.
 // Kept free of server-only imports (unlike auth.ts) so client components can use it too.
 const DISPLAY_NAMES: Record<string, string> = {
-  admin: 'Tracey',
+  admin: 'Charlene',
 };
 
 export function displayName(username: string): string {
   return DISPLAY_NAMES[username] ?? username;
+}
+
+const DOCTOR_PSEUDONYMS = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Avery', 'Jamie'];
+
+// Replaces the whole personal name with a stable pseudonym while preserving an optional practice
+// suffix. Stability matters because the same doctor should still look like the same person across
+// panels, without clinic + real given name making them identifiable.
+export function maskedDoctorName(value: string): string {
+  if (!value || value === 'Not recorded') return value;
+  const match = value.match(/^(.*?)\s*(\([^)]*\))\s*$/);
+  const name = (match ? match[1] : value).trim();
+  const practice = match?.[2] ?? '';
+  let hash = 0;
+  for (const character of name.toLowerCase()) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  const pseudonym = DOCTOR_PSEUDONYMS[hash % DOCTOR_PSEUDONYMS.length];
+  return `Dr ${pseudonym} Doc${practice ? ` ${practice}` : ''}`;
 }
 
 // Which receptionists._id a login corresponds to, for features scoped to "the practice I'm in

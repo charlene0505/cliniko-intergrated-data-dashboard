@@ -119,8 +119,8 @@ export const Permissions = {
   // Can the user manage other users? (placeholder — no user management yet)
   canManageUsers: (role: UserRole): boolean => {
     switch (role) {
-      case 'admin': return true;
-      case 'owner': return false;
+      case 'admin': return false;
+      case 'owner': return true;
       case 'physio': return false;
       default: return false;
     }

@@ -1,4 +1,7 @@
 import { syncAppointments, syncClinicalOthers } from '@/lib/sync-clinical';
+import { rebuildReferralSourceDailyStats, rebuildVisits } from '@/lib/patient-mix';
+import { rebuildReferralDailyStats } from '@/lib/referrals';
+import { computeAndStoreAttendance } from '@/lib/attendance-stats';
 import { getDb } from '@/lib/mongodb';
 import { getSession, isCronRequest } from '@/lib/auth';
 import { clinikoFetch } from '@/lib/cliniko';
@@ -280,6 +283,18 @@ async function runScope(db: Db, send: (data: object) => void, scope: SyncScope, 
     if (scope === 'patients') counts = await runPatientsSync(db, send, since);
     else if (scope === 'appointments') counts = await syncAppointments(db, send, since);
     else counts = await syncClinicalOthers(db, send, since);
+
+    // The date-range collections are rebuilt from whatever this scope just changed, so dashboard
+    // requests only ever run indexed range queries: patients feed the daily referral rollups, while
+    // bookings, attendees and appointment types (split across the other two scopes) feed `visits`.
+    send({ phase: 'computing', message: 'Computing patient mix and attendance stats...' });
+    if (scope === 'patients') {
+      await rebuildReferralDailyStats(db);
+      await rebuildReferralSourceDailyStats(db);
+    } else {
+      await rebuildVisits(db);
+    }
+    await computeAndStoreAttendance(db);
 
     await syncJobsCol.updateOne(
       { _id: insertedId },

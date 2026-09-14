@@ -20,9 +20,10 @@ const receptionists = [
   { _id: 'receptionist-emma', name: 'Emma Thompson', role: 'receptionist' },
   { _id: 'receptionist-liam', name: 'Liam Carter', role: 'receptionist' },
   { _id: 'receptionist-sophie', name: 'Sophie Nguyen', role: 'reception_manager' },
-  // Tracey is the real person behind the "admin" login (see display-name.ts / receptionistIdFor)
-  // — a 4th receptionist, not a stand-in for one of the 3 placeholders above.
-  { _id: 'receptionist-tracey', name: 'Tracey', role: 'receptionist' },
+  // Charlene is the real person behind the "admin" login (see display-name.ts / receptionistIdFor)
+  // — a 4th receptionist, not a stand-in for one of the 3 placeholders above. The _id still says
+  // "tracey" from before a rename: shifts, overrides and tasks all reference it, so it stays as is.
+  { _id: 'receptionist-tracey', name: 'Charlene', role: 'receptionist' },
 ];
 
 // Emma covers Hurstville all week, Liam covers CBD all week, and Sophie (the manager) splits her

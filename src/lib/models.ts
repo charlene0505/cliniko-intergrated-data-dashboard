@@ -14,6 +14,15 @@ export interface Patient {
   phone: string | null;
   appointmentNotes: string | null;
   referralSource: string | null;   // Cliniko's own "how did you hear about us" field, verbatim
+  contactHistory?: ContactHistoryEntry[];
+}
+
+export type ContactHistoryType = 'careplan' | 'payment' | 'clinical';
+
+export interface ContactHistoryEntry {
+  note: string;
+  createdAt: Date;
+  type: ContactHistoryType;
 }
 
 export interface Doctor {
@@ -38,6 +47,39 @@ export interface ReferralStat {
     displayName: string;
     count: number;
   }[];
+}
+
+// ── Derived collections for date-range queries ──────────────────────────────
+//
+// Both are rebuilt at the end of a sync from the raw collections, keyed by practice-local day
+// ("YYYY-MM-DD", Australia/Sydney) so any dashboard range — preset or custom — is an indexed string
+// range match rather than a scan of every patient or appointment.
+
+export type DailyMetric = 'referrals' | 'referralSource';
+
+// One row per day per key. Only for counts that can be summed across days — per-patient questions
+// like "each patient's latest booking" can't be, and are answered from `visits` instead.
+export interface DailyStat {
+  _id: string;              // `${metric}|${date}|${key}`
+  metric: DailyMetric;
+  date: string;             // Practice-local day the patient was created
+  key: string;              // referrals: doctor ID · referralSource: bucket label
+  count: number;
+}
+
+// One row per live (not archived/deleted) attendee, flattened with its booking and pre-classified, so
+// a per-patient question over a range is one aggregation instead of a join across three collections.
+export interface Visit {
+  _id: string;              // Cliniko attendee ID
+  patientId: string;
+  appointmentId: string;
+  businessId: string | null; // Cliniko business (practice) the booking is at
+  startsAt: string;         // UTC ISO, as stored on the appointment
+  date: string;             // Practice-local day of startsAt
+  fundingLabel: string;     // classifyFundingType() of the appointment type
+  isClinical: boolean;      // false for administrative appointment types
+  cancelledAt: string | null;
+  didNotArrive: boolean;
 }
 
 export interface ContactFailure {

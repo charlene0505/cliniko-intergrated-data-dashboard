@@ -1,6 +1,9 @@
 import type { Db } from "mongodb";
 import type { AppointmentRecord, AttendanceRecord } from "./clinical";
-import type { Patient } from "./models";
+import type { Patient, Visit } from "./models";
+import { practiceDay, type DateRange } from "./date-range";
+import { hasDailyStats, replaceDailyStats, sumDailyStats } from "./daily-stats";
+import { replaceDerived } from "./derived";
 
 export interface MixSlice {
   label: string;
@@ -47,26 +50,33 @@ export function classifyReferralSource(raw: string | null): string | null {
   return match?.label ?? "Others";
 }
 
-export async function computeReferralSourceMix(
-  db: Db,
-): Promise<MixSlice[] | null> {
+// Rebuilt at the end of a patients sync, as daily counts per bucket by the day each patient was
+// created. The bucketing is regex-based so it runs here in Node — once per sync, not once per request.
+export async function rebuildReferralSourceDailyStats(db: Db): Promise<void> {
   const patients = await db
     .collection<Patient>("patients")
-    .find({ isDeleted: false })
-    .project({ referralSource: 1 })
+    .find({ isDeleted: false, referralSource: { $nin: [null, ""] } })
+    .project<Pick<Patient, "referralSource" | "clinikoCreatedAt">>({ referralSource: 1, clinikoCreatedAt: 1 })
     .toArray();
-  if (!patients.length) return null;
 
-  const counts = new Map<string, number>();
+  const rows = new Map<string, { date: string; key: string; count: number }>();
   for (const p of patients) {
     const label = classifyReferralSource(p.referralSource);
     if (!label) continue;
-    counts.set(label, (counts.get(label) ?? 0) + 1);
+    const date = practiceDay(p.clinikoCreatedAt);
+    const row = rows.get(`${date}|${label}`) ?? { date, key: label, count: 0 };
+    row.count++;
+    rows.set(`${date}|${label}`, row);
   }
-  if (!counts.size) return null;
-  return [...counts.entries()]
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count);
+  await replaceDailyStats(db, "referralSource", [...rows.values()]);
+}
+
+async function readReferralSourceMix(db: Db, range: DateRange): Promise<MixSlice[]> {
+  const rows = await db
+    .collection("daily_stats")
+    .aggregate<{ _id: string; count: number }>([...sumDailyStats("referralSource", range), { $sort: { count: -1, _id: 1 } }])
+    .toArray();
+  return rows.map((r) => ({ label: r._id, count: r.count }));
 }
 
 // ── Funding ──────────────────────────────────────────────────────────────────
@@ -109,48 +119,90 @@ export function classifyFundingType(
     : "Others";
 }
 
-export async function computeFundingMix(db: Db): Promise<MixSlice[] | null> {
+// Rebuilt at the end of an appointments or clinical sync — funding depends on bookings, attendees and
+// appointment types, which arrive in different scopes. Joining and classifying happen here, once, so
+// the range query below never loads appointments or evaluates a regex.
+export async function rebuildVisits(db: Db): Promise<void> {
   const [appointments, attendees, appointmentTypes] = await Promise.all([
-    db.collection<AppointmentRecord>("appointments").find({}).toArray(),
-    db.collection<AttendanceRecord>("attendees").find({}).toArray(),
     db
-      .collection<{ _id: string; name: string }>("appointment_types")
+      .collection<AppointmentRecord>("appointments")
       .find({})
+      .project<AppointmentRecord>({ startsAt: 1, cancelledAt: 1, archivedAt: 1, deletedAt: 1, didNotArrive: 1, appointmentTypeId: 1, businessId: 1 })
       .toArray(),
+    db
+      .collection<AttendanceRecord>("attendees")
+      .find({})
+      .project<AttendanceRecord>({ patientId: 1, appointmentId: 1, cancelledAt: 1, archivedAt: 1, deletedAt: 1 })
+      .toArray(),
+    db.collection<{ _id: string; name: string }>("appointment_types").find({}).toArray(),
   ]);
-  if (!appointments.length || !attendees.length) return null;
 
   const typeNameById = new Map(appointmentTypes.map((t) => [t._id, t.name]));
   const apptById = new Map(appointments.map((a) => [a._id, a]));
 
-  // Latest clinical (non-admin) booking per patient, most recent first.
-  const latestByPatient = new Map<string, AppointmentRecord>();
-  const sorted = [...attendees].sort((a, b) => {
-    const aAppt = apptById.get(a.appointmentId);
-    const bAppt = apptById.get(b.appointmentId);
-    return (bAppt?.startsAt ?? "").localeCompare(aAppt?.startsAt ?? "");
-  });
-  for (const at of sorted) {
-    if (at.archivedAt || at.deletedAt || latestByPatient.has(at.patientId))
-      continue;
+  const visits: Visit[] = [];
+  for (const at of attendees) {
+    if (at.archivedAt || at.deletedAt) continue;
     const appt = apptById.get(at.appointmentId);
     if (!appt || appt.archivedAt || appt.deletedAt) continue;
-    const typeName = appt.appointmentTypeId
-      ? typeNameById.get(appt.appointmentTypeId)
-      : undefined;
-    if (typeName && ADMIN_APPOINTMENT_TYPE_PATTERN.test(typeName)) continue;
-    latestByPatient.set(at.patientId, appt);
+    const typeName = appt.appointmentTypeId ? (typeNameById.get(appt.appointmentTypeId) ?? null) : null;
+    visits.push({
+      _id: at._id,
+      patientId: at.patientId,
+      appointmentId: at.appointmentId,
+      businessId: appt.businessId ?? null,
+      startsAt: appt.startsAt,
+      date: practiceDay(new Date(appt.startsAt)),
+      fundingLabel: classifyFundingType(typeName),
+      isClinical: !typeName || !ADMIN_APPOINTMENT_TYPE_PATTERN.test(typeName),
+      cancelledAt: at.cancelledAt ?? appt.cancelledAt ?? null,
+      didNotArrive: appt.didNotArrive === true,
+    });
   }
+  await replaceDerived(db, "visits", {}, visits);
+}
 
-  const counts = new Map<string, number>();
-  for (const appt of latestByPatient.values()) {
-    const typeName = appt.appointmentTypeId
-      ? (typeNameById.get(appt.appointmentTypeId) ?? null)
-      : null;
-    const label = classifyFundingType(typeName);
-    counts.set(label, (counts.get(label) ?? 0) + 1);
+// Builds `visits` on demand when it's missing, or was built before `businessId` was added to it — so
+// a deploy doesn't have to wait for the next sync. Returns false when there's no attendance to build from.
+export async function ensureVisits(db: Db): Promise<boolean> {
+  const sample = await db.collection<Visit>("visits").findOne({}, { projection: { businessId: 1 } });
+  if (sample && "businessId" in sample) return true;
+  if (!(await db.collection("attendees").findOne({}, { projection: { _id: 1 } }))) return false;
+  await rebuildVisits(db);
+  return true;
+}
+
+// A patient's funding for a period is the funding of their latest clinical booking inside it.
+async function readFundingMix(db: Db, range: DateRange): Promise<MixSlice[]> {
+  const rows = await db
+    .collection<Visit>("visits")
+    .aggregate<{ _id: string; count: number }>([
+      { $match: { date: { $gte: range.from, $lte: range.to }, isClinical: true } },
+      { $sort: { startsAt: -1, _id: -1 } },
+      { $group: { _id: "$patientId", label: { $first: "$fundingLabel" } } },
+      { $group: { _id: "$label", count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+    ])
+    .toArray();
+  return rows.map((r) => ({ label: r._id, count: r.count }));
+}
+
+// ── Range queries ────────────────────────────────────────────────────────────
+
+export type PatientMixMode = "Funding" | "Referral source";
+
+// Returns null only when the source data has never been synced (the panel's "no data" state); a
+// period with nothing in it is a real, empty mix.
+export async function readPatientMix(db: Db, mode: PatientMixMode, range: DateRange): Promise<MixSlice[] | null> {
+  // Before the first sync that builds the derived collection (e.g. straight after deploying this), it's
+  // built once on demand from whatever raw data is already there.
+  if (mode === "Funding") {
+    if (!(await ensureVisits(db))) return null;
+    return readFundingMix(db, range);
   }
-  return [...counts.entries()]
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count);
+  if (!(await hasDailyStats(db, "referralSource"))) {
+    if (!(await db.collection("patients").findOne({}, { projection: { _id: 1 } }))) return null;
+    await rebuildReferralSourceDailyStats(db);
+  }
+  return readReferralSourceMix(db, range);
 }

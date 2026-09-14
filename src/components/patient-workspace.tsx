@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { DashboardPatient } from "@/lib/patient-dashboard";
+import { maskedDoctorName } from "@/lib/display-name";
 
 const tabs = [
   "Overview",
@@ -215,7 +216,7 @@ export default function PatientWorkspace({ showcase }: { showcase: boolean }) {
                       <td className="px-3 py-4">
                         {p.clinical?.practitioner ?? "Not recorded"}
                         <p className="mt-1 text-xs text-stone-500">
-                          {p.doctor}
+                          {maskedDoctorName(p.doctor)}
                         </p>
                       </td>
                       <td className="max-w-xs px-3 py-4">
@@ -358,7 +359,7 @@ export default function PatientWorkspace({ showcase }: { showcase: boolean }) {
             <dl className="mt-6 grid grid-cols-2 gap-5 text-sm">
               {Object.entries({
                 "Patient ID": selected._id,
-                "Referring doctor": selected.doctor,
+                "Referring doctor": maskedDoctorName(selected.doctor),
                 Registered: date(selected.clinikoCreatedAt),
                 Practitioner: c?.practitioner,
                 Phone: c?.phone,

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import type { ReceptionMessage, Receptionist } from "@/lib/models";
 import { displayName } from "@/lib/display-name";
 import { Segments } from "./segments";
@@ -20,7 +21,6 @@ export function ReceptionTodoPanel({
   onCreate,
   onUpdate,
   onDelete,
-  onPreview,
   onBriefingClose,
 }: {
   tasks: ReceptionMessage[] | null;
@@ -31,7 +31,6 @@ export function ReceptionTodoPanel({
   onCreate: (input: { text: string; recipient: Recipient; priority: "High" | "Routine" }) => void;
   onUpdate: (id: string, input: { text: string; recipient: Recipient; priority: "High" | "Routine" }) => void;
   onDelete: (id: string) => void;
-  onPreview: (label: string) => void;
   onBriefingClose: () => void;
 }) {
   const [composing, setComposing] = useState(false);
@@ -105,14 +104,10 @@ export function ReceptionTodoPanel({
 
   return (
     <section className={`${panel} h-115`}>
-      <button
-        type="button"
-        className={`${panelHeaderLink} group`}
-        onClick={() => onPreview("All reception tasks")}
-      >
+      <Link href="/todos" className={`${panelHeaderLink} group`}>
         <h2 className={panelHeaderTitle}>To Do List</h2>
         <span className={panelHeaderArrow}>→</span>
-      </button>
+      </Link>
 
       <div className="flex items-center justify-between gap-3 px-6 pt-3">
         <Segments
@@ -137,7 +132,7 @@ export function ReceptionTodoPanel({
           onClick={() => setComposing(false)}
         >
           <div
-            className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-8"
+            className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-8 text-ink"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -213,7 +208,7 @@ export function ReceptionTodoPanel({
           onClick={() => setPendingDelete(null)}
         >
           <div
-            className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-8"
+            className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-8 text-ink"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-semibold tracking-tight">Delete this task?</h3>

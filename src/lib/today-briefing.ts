@@ -3,6 +3,7 @@ import { resolveShiftsForDate } from './reception';
 import type { AppointmentRecord, AttendanceRecord } from './clinical';
 import type { Patient } from './models';
 import { CURATED_SUMMARIES } from './today-briefing-curated';
+import { practiceDay } from './date-range';
 
 interface TodayEntry {
   patientName: string;
@@ -60,12 +61,12 @@ export interface TodayBriefing {
   nextShift?: DayBriefing;
 }
 
-function dateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function addDays(d: Date, n: number): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+// Days are practice-local "YYYY-MM-DD" strings (Australia/Sydney). The server's own clock can't be used
+// for this: on a UTC host, "today" would roll over at 10–11am Sydney time.
+function addDayString(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 // Who's on for a given date, at which practice — this is the whole "scoped to the practice she's
@@ -80,9 +81,9 @@ const LOOKAHEAD_DAYS = 14;
 // Walks forward day by day (capped at LOOKAHEAD_DAYS) to find this receptionist's next rostered
 // day — recurring shifts alone repeat weekly, but an override could also place them somewhere
 // sooner, so this has to check each date rather than just jumping to "same weekday next week".
-async function nextShiftFor(db: Db, receptionistId: string, from: Date): Promise<{ date: string; businessId: string } | null> {
+async function nextShiftFor(db: Db, receptionistId: string, fromDay: string): Promise<{ date: string; businessId: string } | null> {
   for (let i = 1; i <= LOOKAHEAD_DAYS; i++) {
-    const date = dateStr(addDays(from, i));
+    const date = addDayString(fromDay, i);
     const businessId = await businessFor(db, receptionistId, date);
     if (businessId) return { date, businessId };
   }
@@ -183,27 +184,33 @@ async function computeReceptionNotes(db: Db, inWindow: AppointmentRecord[]): Pro
 // The actual aggregation, parameterized by date + business rather than always "now" — shared by
 // today's briefing and the next-shift preview so they build the exact same shape.
 async function computeDayBriefing(db: Db, businessId: string, date: string): Promise<DayBriefing> {
-  const [y, m, d] = date.split('-').map(Number);
-  const startOfDay = new Date(y, m - 1, d);
-  const endOfDay = addDays(startOfDay, 1);
-
-  const [appointments, attendees, business] = await Promise.all([
-    db.collection<AppointmentRecord>('appointments').find({ businessId }).toArray(),
-    db.collection<AttendanceRecord>('attendees').find({}).toArray(),
+  // Only the one day is fetched. This used to load every appointment the practice has ever had plus
+  // every attendee in the database (~12k + ~14k documents, ~37s) and filter down to the day in JS.
+  // startsAt is stored in UTC, so the indexed query takes a window a day wider either side and the
+  // exact Sydney day is matched afterwards.
+  const [candidates, business] = await Promise.all([
+    db
+      .collection<AppointmentRecord>('appointments')
+      .find({
+        businessId,
+        startsAt: { $gte: `${addDayString(date, -1)}T00:00:00Z`, $lt: `${addDayString(date, 2)}T00:00:00Z` },
+      })
+      .toArray(),
     db.collection<{ _id: string; name: string }>('businesses').findOne({ _id: businessId }),
   ]);
 
-  const inWindow = appointments.filter((a) => {
-    if (a.cancelledAt || a.archivedAt || a.deletedAt) return false;
-    const startsAt = new Date(a.startsAt);
-    return startsAt >= startOfDay && startsAt < endOfDay;
-  });
+  const inWindow = candidates.filter(
+    (a) => !a.cancelledAt && !a.archivedAt && !a.deletedAt && practiceDay(new Date(a.startsAt)) === date,
+  );
 
-  const apptIds = new Set(inWindow.map((a) => a._id));
+  const attendees = await db
+    .collection<AttendanceRecord>('attendees')
+    .find({ appointmentId: { $in: inWindow.map((a) => a._id) } })
+    .toArray();
   const attendeeByAppt = new Map<string, AttendanceRecord>();
   for (const at of attendees) {
     if (at.archivedAt || at.deletedAt || at.cancelledAt) continue;
-    if (apptIds.has(at.appointmentId)) attendeeByAppt.set(at.appointmentId, at);
+    attendeeByAppt.set(at.appointmentId, at);
   }
 
   const receptionNotes = await computeReceptionNotes(db, inWindow);
@@ -251,9 +258,9 @@ async function computeDayBriefing(db: Db, businessId: string, date: string): Pro
 }
 
 export async function computeTodayBriefing(db: Db, receptionistId: string, now = new Date()): Promise<TodayBriefing> {
-  const date = dateStr(now);
+  const date = practiceDay(now);
   const businessId = await businessFor(db, receptionistId, date);
-  const next = await nextShiftFor(db, receptionistId, now);
+  const next = await nextShiftFor(db, receptionistId, date);
   const nextShift = next ? await computeDayBriefing(db, next.businessId, next.date) : undefined;
 
   if (businessId) return { status: 'ok', ...(await computeDayBriefing(db, businessId, date)), nextShift };
